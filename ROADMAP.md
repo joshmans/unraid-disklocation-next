@@ -80,21 +80,46 @@ data*.
   compiled binary is its own OS process with its own heap regardless of packaging method -
   Node has no mechanism for one process to attach to another's running runtime, so this
   isn't something to design around.
+- **The `unraid-api` GraphQL schema, verified 2026-09 against a live 7.2+ instance** (both
+  by reading [unraid/api](https://github.com/unraid/api)'s resolver source and by running
+  real queries against a real box - see [src/graphql/queries.ts](src/graphql/queries.ts)).
+  Three findings that shape everything below:
+  - `disks` (physical inventory: serial, model, vendor, size, `temperature`, and only a
+    coarse `smartStatus: OK | UNKNOWN` - no detailed attributes) and `array` (logical
+    Unraid slot assignment: `idx`, disk1/disk2/parity/cacheN/flash groupings) both work as
+    expected and are now real, typed queries, not guesses.
+  - **Unraid has no concept of physical bay/tray position, confirmed by the schema having
+    none.** `array.idx` is a *logical* slot number, not a chassis location. This was always
+    true of the original PHP plugin too (it's the entire reason "Disk Location" exists as
+    a plugin rather than something Unraid itself shows) - it just confirms the physical
+    mapping stays 100% this plugin's own stored config either way, unaffected by the
+    rewrite.
+  - **Detailed SMART attributes are not exposed over GraphQL, even though `unraid-api`
+    reads them internally.** `DisksService.getTemperature()` runs `smartctl -A -j <device>`
+    and parses the full `ata_smart_attributes.table` (the standard ATA attribute table -
+    power-on hours, reallocated sectors, etc.) via its own zod schema, then discards
+    everything except `temperature.current` before it reaches GraphQL. So this plugin's
+    SMART-history feature (the whole reason for the original plugin's Trends tab) has to
+    shell out to `smartctl` itself, the same way the PHP version did - `unraid-api` doesn't
+    give us a shortcut here. This is a point in favor of the `.plg`-daemon-on-host
+    distribution decision already made: a Docker container would need extra
+    privileged/device-passthrough config to run `smartctl` against physical devices, a
+    host-native daemon just does it directly.
+- **Auth: always a stored API key, no session/cookie reuse.** `unraid-api` does support
+  cookie-based auth alongside API keys (confirmed in `auth.service.ts`), but it doesn't
+  matter here: SMART-history collection has to run as a background poll independent of any
+  open browser tab, which only a persistent API key can do. Passing through a browser
+  session cookie would still leave the background-polling path needing a stored key, so
+  there's no scenario where it replaces one - not worth the added complexity.
 - **SMART history storage.** The PHP version's purpose-built SQLite time series (temp,
   power-on hours, sector counts, wear level, overall status; configurable retention) is a
   good design and the plan is to carry the *idea* forward using `node:sqlite` (see runtime
-  packaging above) — not yet built.
+  packaging above), fed by this plugin's own `smartctl` calls per the finding above - not
+  yet built.
 - **How much of the tray-map UI carries over conceptually vs. needs rebuilding.** The
   tray/bay visual metaphor is the whole point of this plugin and should carry over; the
   actual rendering will be rebuilt from scratch (frontend framework/bundler not yet chosen),
   not ported.
-- **Whether `unraid-api`'s session/SSO auth can be reused**, or whether this always relies
-  on a user-generated static API key stored in this plugin's own config. Since the daemon
-  now runs on the box itself (not a separate container), reuse is more plausible than it
-  was under the Docker option, but not yet verified against a live instance.
-- **The actual GraphQL schema.** [src/graphql/client.ts](src/graphql/client.ts) is a bare
-  request wrapper with no real queries yet - the array/disk/SMART shape needs to be explored
-  against a live Unraid 7.2+ instance's schema before any of that can be written for real.
 
 ## Conventions carried forward
 

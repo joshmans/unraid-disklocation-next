@@ -1,8 +1,6 @@
 import type { Settings } from "../config.js";
+import { ARRAY_QUERY, DISKS_QUERY, type ArrayResult, type DiskResult } from "./queries.js";
 
-// Thin wrapper only - the actual queries (array/disk/SMART shape) still need
-// to be written against a live Unraid 7.2+ instance's schema. Nothing here
-// has been run against real unraid-api yet.
 export async function queryUnraidApi<T>(
   settings: Settings,
   query: string,
@@ -26,4 +24,14 @@ export async function queryUnraidApi<T>(
     throw new Error(`unraid-api returned errors: ${JSON.stringify(errors)}`);
   }
   return data as T;
+}
+
+export async function getDisks(settings: Settings): Promise<DiskResult[]> {
+  const { disks } = await queryUnraidApi<{ disks: DiskResult[] }>(settings, DISKS_QUERY);
+  return disks;
+}
+
+export async function getArray(settings: Settings): Promise<ArrayResult> {
+  const { array } = await queryUnraidApi<{ array: ArrayResult }>(settings, ARRAY_QUERY);
+  return array;
 }
