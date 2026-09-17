@@ -97,13 +97,15 @@ data*.
     edge case), it re-appends and reloads again. `nginx -s reload` (the raw binary signal,
     bypassing Unraid's regenerating wrapper) is used for every reload here, same as
     `u-manager-companion`'s cleanup script does - `rc.nginx reload` would just re-trigger the
-    exact regeneration this is healing from. Verified against scratch files standing in for
-    the real paths (`DISKLOCATION_NEXT_LOCATIONS_CONF`/`_NGINX_INCLUDE`/`_NGINX_BIN` env
-    overrides) and a fake `nginx` binary logging its invocations: cold start appended the line
-    and reloaded once; overwriting the fake `locations.conf` to simulate a real regeneration
-    triggered a heal + reload within ~1s with no manual intervention; touching the file with
-    no content change triggered no reload. Not yet re-verified against the real box's actual
-    `rc.nginx reload` (next step).
+    exact regeneration this is healing from. Verified twice: first against scratch files
+    standing in for the real paths (`DISKLOCATION_NEXT_LOCATIONS_CONF`/`_NGINX_INCLUDE`/
+    `_NGINX_BIN` env overrides) and a fake `nginx` binary logging its invocations - cold start
+    appended the line and reloaded once, overwriting the fake `locations.conf` to simulate a
+    regeneration triggered a heal + reload within ~1s, a no-op touch triggered no reload - then
+    against the real box's actual `/etc/rc.d/rc.nginx reload`: it visibly regenerated
+    `locations.conf` (the include line's position shifted, proving the file was rebuilt from
+    scratch) and wiped our line, and the daemon's log showed the heal firing and re-appending
+    it within ~1-2s with zero manual intervention, `unraid-api` and the UI unaffected throughout.
 - **Runtime packaging: Node.js + Single Executable Applications (SEA), not Bun.** SEA has
   been stable since Node 22 and streamlined further in Node 24 (`--build-sea`), so the
   `.plg` ships a compiled binary with no separate Node.js install required on the box
