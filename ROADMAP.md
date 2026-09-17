@@ -233,10 +233,10 @@ data*.
   `type` really is `"HD"` / `"SSD"` / `"NVMe"`, which the existing `/ssd/i` substring check and
   the `interfaceType === "PCIE"` check correctly classify - no code changes needed, this just
   confirms the guesses were right. `smartStatus` was `"OK"` for every drive except one USB boot
-  device (`"UNKNOWN"`), matching the documented OK/UNKNOWN-only shape. Still not verified: that
-  the Locate mechanic actually produces a visible LED blink on real hot-swap hardware - that
-  needs the daemon physically running on the box (GraphQL has no way to trigger or observe it),
-  which didn't happen this session.
+  device (`"UNKNOWN"`), matching the documented OK/UNKNOWN-only shape. **Locate confirmed on real
+  hot-swap hardware (2026-09-17)**: clicked Locate on an unassigned drive through the live UI
+  running on the actual box, and the drive's bay activity LED visibly blinked - closing out the
+  one piece of the Locate feature that GraphQL-only testing couldn't reach.
 - **Per-skin default LED color, with a user override per skin/status.** Real trays don't agree
   on one green/amber/red convention - NetApp DS-series shelves are commonly blue for normal
   status rather than green, for instance (a general-knowledge call, not verified against a real
