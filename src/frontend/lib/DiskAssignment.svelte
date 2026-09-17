@@ -99,7 +99,9 @@
 </script>
 
 <div class="assignment">
-  {#if disksError}
+  {#if layout.groups.length === 0}
+    <p class="hint">Define at least one bay or PCIe group in the Settings tab before assigning disks.</p>
+  {:else if disksError}
     <p class="err">
       Couldn't load drives from unraid-api: {disksError}. The daemon needs an API key/URL saved
       (see README) before drives can be listed here.

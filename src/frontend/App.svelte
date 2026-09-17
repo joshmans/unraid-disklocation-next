@@ -30,11 +30,20 @@
   // the daemon/proxy being unreachable (local dev without it in front),
   // where falling back to the bundled demo layout is still the right call.
   let productionEmpty = false;
+  // Guards loadDisks so it only ever fires once, and only once we know
+  // there's at least one bay/PCIe group to assign drives into - avoids
+  // burning the 20+ second /disks round trip on an unconfigured install
+  // with nothing to assign yet.
+  let disksRequested = false;
 
   onMount(() => {
     loadLayout();
-    loadDisks();
   });
+
+  $: if (layoutLoaded && liveLayout.groups.length > 0 && !disksRequested) {
+    disksRequested = true;
+    loadDisks();
+  }
 
   async function loadLayout() {
     try {
@@ -111,6 +120,9 @@
       liveLogos = merged.logos;
       liveLedColors = merged.ledColors;
       liveAssignments = merged.assignments;
+      // A successful save proves the daemon is reachable, so this always
+      // reflects real state going forward (not just the initial classification).
+      productionEmpty = merged.layout.groups.length === 0;
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
