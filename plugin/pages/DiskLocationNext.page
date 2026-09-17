@@ -1,0 +1,13 @@
+Menu="Tools"
+Icon="server"
+Title="Disk Location"
+---
+<?php
+// Thin shell only, deliberately no PHP logic beyond this - the real UI is
+// the bundled JS below, mounted directly into this DOM node. No iframe: the
+// script runs in this page's own document, and its API calls go through the
+// same-origin nginx proxy (see plugin/nginx/unraid-disklocation-next.conf),
+// not directly to the Node daemon's port.
+?>
+<div id="unraid-disklocation-next-app"></div>
+<script src="/plugins/unraid-disklocation-next/app/dist/frontend.js"></script>

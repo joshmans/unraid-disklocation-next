@@ -1,0 +1,57 @@
+<?xml version='1.0' standalone='yes'?>
+
+<!DOCTYPE PLUGIN [
+<!ENTITY name       "unraid-disklocation-next">
+<!ENTITY author     "Joshua Mans">
+<!ENTITY version    "0.0.0-dev">
+<!ENTITY launch     "Tools/&name;">
+<!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
+<!ENTITY pluginLOC  "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
+<!ENTITY supportURL "https://github.com/joshmans/&name;">
+]>
+
+<PLUGIN name="&name;"
+        author="&author;"
+        version="&version;"
+        launch="&launch;"
+        pluginURL="&pluginURL;"
+        icon="server"
+        support="&supportURL;"
+>
+
+<!--
+    Copyright 2026, Joshua Mans
+
+    Licensed under the MIT License - see LICENSE.
+
+    This is a clean-room rewrite, not derived from unraid-disklocation's GPLv3
+    codebase - only the tray-map/SMART-history ideas carry over.
+-->
+
+<CHANGES>
+###0.0.0-dev
+ - Scaffold only. Not yet functional - see ROADMAP.md for status.
+</CHANGES>
+
+<!--
+############################################
+# NOT YET FUNCTIONAL
+#
+# Still open before this can install anything real:
+#  - Runtime packaging: self-contained compiled binary vs. requiring a
+#    separately-installed Node.js runtime (affects what gets downloaded here)
+#  - Where release artifacts get published/versioned
+#
+# See ROADMAP.md. This file exists to establish the expected shape (entities,
+# rc.d + nginx conf.d + page install steps), not to be installed as-is.
+############################################
+-->
+<FILE Name="/tmp/&name;-install" Run="/bin/bash">
+<INLINE>
+echo "unraid-disklocation-next: scaffold only, install script not yet implemented"
+exit 1
+</INLINE>
+</FILE>
+
+</PLUGIN>

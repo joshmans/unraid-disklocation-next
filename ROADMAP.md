@@ -50,29 +50,48 @@ data*.
 - **Approach: full rewrite, not a gradual migration.** There's no PHP logic worth wrapping
   behind a resolver; the data access pattern (GraphQL query vs. file-parsing/`smartctl`
   shell-out) is different enough that a wrapper would be its own throwaway layer.
+- **Distribution: `.plg`-installed Node.js daemon, not a Docker container.** Closer to the
+  original plugin's install experience and lets it register in Unraid's own nav (`Tools/`),
+  rather than living in the Docker tab as a separate app. Precedent: plugins like
+  netbird-unraid already install/supervise non-PHP daemons this way, via an `rc.d` script
+  under `/usr/local/etc/rc.d/` (never `/etc/rc.d/`, which Unraid owns as a runtime symlink -
+  packaging into it can break nginx/php-fpm/samba/docker) started by an array-start event
+  hook. Skeleton: [plugin/rc.d/rc.unraid-disklocation-next](plugin/rc.d/rc.unraid-disklocation-next),
+  [plugin/unraid-disklocation-next.plg](plugin/unraid-disklocation-next.plg).
+- **UI delivery: mounted into the DOM, not an iframe.** The `.page` file is a normal plugin
+  page with a mount `<div>` and a `<script>` tag loading this project's own bundled
+  frontend JS - it renders in the same document, not a nested browsing context (iframing
+  Unraid's own UI is a known source of breakage, e.g. the Connect plugin's iframe issues on
+  the forums). API calls stay same-origin via an nginx `conf.d` drop-in snippet that
+  reverse-proxies a path to the local daemon - Unraid's nginx already includes
+  `/etc/nginx/conf.d/*.conf`, so this needs no separate reverse-proxy container. Skeleton:
+  [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page),
+  [plugin/nginx/unraid-disklocation-next.conf](plugin/nginx/unraid-disklocation-next.conf).
 
 ## Open questions (not yet decided)
 
-- **Distribution mechanism.** Options to weigh: a Docker container installed via Community
-  Apps (matches how most modern third-party Unraid tools ship today), vs. a lightweight
-  `.plg` that installs and supervises a Node service directly on the array (closer to the
-  original plugin's install experience, no separate container to manage). This affects the
-  install UX and how deeply it can hook into Unraid's own webGUI navigation.
-- **UI delivery.** Whether the web UI is served by this service standalone (its own page,
-  linked from Unraid's nav via whatever the distribution mechanism allows) vs. designed to
-  be embeddable inside the Unraid webGUI's own chrome. Depends partly on the distribution
-  answer above.
+- **Runtime packaging.** Unraid doesn't ship Node.js by default (users typically add it via
+  a separate NerdPack-style plugin), so a `.plg` that just execs `node index.js` adds an
+  external dependency and a more fragile install. The better option is likely a
+  self-contained compiled binary (Bun's `--compile`, Node's Single Executable Application
+  support, or `pkg`) so the plugin has no separate runtime prerequisite - not yet decided
+  which, and not yet built either way. The current `rc.d` skeleton assumes a system Node
+  as a placeholder and is marked accordingly.
 - **SMART history storage.** The PHP version's purpose-built SQLite time series (temp,
   power-on hours, sector counts, wear level, overall status; configurable retention) is a
   good design and the plan is to carry the *idea* forward, but the implementation will be
   new (e.g. `better-sqlite3` or similar) — not yet built.
 - **How much of the tray-map UI carries over conceptually vs. needs rebuilding.** The
   tray/bay visual metaphor is the whole point of this plugin and should carry over; the
-  actual rendering will be rebuilt in whatever frontend approach comes out of the UI
-  delivery question above, not ported.
+  actual rendering will be rebuilt from scratch (frontend framework/bundler not yet chosen),
+  not ported.
 - **Whether `unraid-api`'s session/SSO auth can be reused**, or whether this always relies
-  on a user-generated static API key — depends on whether this ends up running "inside"
-  Unraid's own webGUI origin or as a separate origin/container.
+  on a user-generated static API key stored in this plugin's own config. Since the daemon
+  now runs on the box itself (not a separate container), reuse is more plausible than it
+  was under the Docker option, but not yet verified against a live instance.
+- **The actual GraphQL schema.** [src/graphql/client.ts](src/graphql/client.ts) is a bare
+  request wrapper with no real queries yet - the array/disk/SMART shape needs to be explored
+  against a live Unraid 7.2+ instance's schema before any of that can be written for real.
 
 ## Conventions carried forward
 
