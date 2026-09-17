@@ -142,13 +142,21 @@ data*.
 - **Drive-type icons**: real distinct silhouettes, not three variations on a rounded
   rectangle - HDD is a platter+arm circle, SSD is a flat rectangular drive body, NVMe is a
   notched gumstick (the actual M.2 module shape). [assets/drive-icons/](assets/drive-icons/).
+- **Tray-map grid: a chassis is a list of bay groups, not one flat grid.** A real chassis is
+  physically segmented (e.g. a front 3.5" hot-swap cage and a separate rear 2.5" cage aren't
+  one continuous grid), so [chassis.ts](src/frontend/lib/chassis.ts) models a `ChassisLayout`
+  as a list of `BayGroup`s, each its own `rows`/`columns` grid of `BayConfig` entries (skin id
+  + orientation per bay, mix-and-match freely). [TrayMap.svelte](src/frontend/lib/TrayMap.svelte)
+  renders each group as its own labeled CSS grid of `TraySkin` instances, keyed by a stable
+  bay id that live drive data (once wired up) merges onto by that id; an unoccupied id renders
+  as an empty-bay placeholder rather than nothing. Verified end-to-end in a real browser
+  against a mixed-orientation, multi-skin, multi-group example layout (24 SuperMicro-skinned
+  horizontal bays + 4 HP-skinned vertical bays) - confirmed programmatically, not just
+  visually, that per-bay status color and drive-type icon color compute correctly (amber/red/
+  green LEDs, blue/green/purple icons) for the right bays.
 
 ## Open questions (not yet decided)
 
-- **The actual tray-map grid**: this session built a one-skin-at-a-time preview
-  (`src/frontend/App.svelte`) to prove the skin-discovery and overlay mechanism works, not
-  the real layout - arranging many `TraySkin` instances into a grid matching a user-defined
-  physical chassis (rows/columns, or the PCIe-carrier grouping below) is still unbuilt.
 - **PCIe NVMe carrier as a live component.** [assets/pcie-carrier/default.svg](assets/pcie-carrier/default.svg)
   is a static shell (frame, heatsink, edge connector); the per-module rows (icon, serial,
   count driven by the x8/x16/bay-count config) still need a Svelte component, analogous to

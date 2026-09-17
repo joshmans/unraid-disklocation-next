@@ -1,7 +1,9 @@
 <script lang="ts">
   import { skins } from "./lib/trayskins";
   import TraySkin from "./lib/TraySkin.svelte";
+  import TrayMap from "./lib/TrayMap.svelte";
   import { driveIconMeta } from "./lib/driveicons";
+  import { exampleLayout, exampleDrives } from "./lib/chassis";
 
   let selectedId = skins[0]?.id;
   let orientation: "horizontal" | "vertical" = "horizontal";
@@ -49,12 +51,20 @@
       <li><strong>{info.name}</strong> - {info.description}</li>
     {/each}
   </ul>
+
+  <h2>Tray map</h2>
+  <p class="status">
+    {exampleLayout.name} - sample layout/occupancy, not yet wired to a settings UI or live disk data.
+  </p>
+  <div class="map">
+    <TrayMap layout={exampleLayout} drives={exampleDrives} />
+  </div>
 </main>
 
 <style>
   main {
     font-family: system-ui, -apple-system, sans-serif;
-    max-width: 480px;
+    max-width: 640px;
     color: #242420;
   }
   h1 {
@@ -93,5 +103,8 @@
   .legend {
     font-size: 13px;
     padding-left: 18px;
+  }
+  .map {
+    margin: 16px 0 24px;
   }
 </style>
