@@ -3,6 +3,8 @@
 // directory + a PR, not a code change. See assets/tray-skins/README.md for
 // the contribution format.
 
+import type { DriveStatus } from "../../shared/chassis-types.js";
+
 export interface SkinOverlayAnchor {
   cx?: number;
   cy?: number;
@@ -28,6 +30,8 @@ export interface SkinMeta {
   unofficial: boolean;
   disclaimer?: string;
   overlays: { horizontal: SkinOverlays; vertical: SkinOverlays };
+  /** This skin's default status-LED colors - real trays don't all use the same green/amber/red convention. Falls back to status.ts's DEFAULT_LED_COLORS for any status left unset. */
+  ledColors?: Partial<Record<DriveStatus, string>>;
 }
 
 export interface Skin extends SkinMeta {

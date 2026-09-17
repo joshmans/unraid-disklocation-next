@@ -6,8 +6,8 @@
   import Settings from "./lib/Settings.svelte";
   import DiskAssignment from "./lib/DiskAssignment.svelte";
   import { driveIconMeta } from "./lib/driveicons";
-  import { exampleLayout, exampleDrives, exampleLogos } from "./lib/chassis";
-  import type { ChassisLayout, LogoConfig, Assignments, BayDrive } from "./lib/chassis";
+  import { exampleLayout, exampleDrives, exampleLogos, exampleLedColors } from "./lib/chassis";
+  import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive } from "./lib/chassis";
   import type { DiskResult } from "../graphql/queries";
   import { driveFromDisk } from "../shared/derive-drive";
 
@@ -20,6 +20,7 @@
 
   let liveLayout: ChassisLayout = exampleLayout;
   let liveLogos: LogoConfig = exampleLogos;
+  let liveLedColors: LedColorConfig = exampleLedColors;
   let liveAssignments: Assignments = {};
   let disks: DiskResult[] | null = null;
   let disksError = "";
@@ -34,6 +35,7 @@
           liveLayout = stored.layout;
           liveLogos = stored.logos;
           liveAssignments = stored.assignments ?? {};
+          liveLedColors = stored.ledColors ?? {};
         }
       }
     } catch {
@@ -72,11 +74,13 @@
   async function persistAll(next: {
     layout?: ChassisLayout;
     logos?: LogoConfig;
+    ledColors?: LedColorConfig;
     assignments?: Assignments;
   }): Promise<{ ok: boolean; error?: string }> {
     const merged = {
       layout: next.layout ?? liveLayout,
       logos: next.logos ?? liveLogos,
+      ledColors: next.ledColors ?? liveLedColors,
       assignments: next.assignments ?? liveAssignments,
     };
     try {
@@ -88,6 +92,7 @@
       if (!res.ok) throw new Error(`save failed: ${res.status}`);
       liveLayout = merged.layout;
       liveLogos = merged.logos;
+      liveLedColors = merged.ledColors;
       liveAssignments = merged.assignments;
       return { ok: true };
     } catch (err) {
@@ -95,8 +100,8 @@
     }
   }
 
-  function saveSettings(layout: ChassisLayout, logos: LogoConfig) {
-    return persistAll({ layout, logos });
+  function saveSettings(layout: ChassisLayout, logos: LogoConfig, ledColors: LedColorConfig) {
+    return persistAll({ layout, logos, ledColors });
   }
 
   function saveAssignments(assignments: Assignments) {
@@ -152,7 +157,7 @@
       {#if !disks}- occupancy shown here is sample data ({disksError || "daemon not reachable"}).{/if}
     </p>
     <div class="map">
-      <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} />
+      <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} ledColors={liveLedColors} />
     </div>
 
     <h2>Disk assignment</h2>
@@ -165,7 +170,12 @@
     />
 
     <h2>Layout settings</h2>
-    <Settings initialLayout={liveLayout} initialLogos={liveLogos} save={saveSettings} />
+    <Settings
+      initialLayout={liveLayout}
+      initialLogos={liveLogos}
+      initialLedColors={liveLedColors}
+      save={saveSettings}
+    />
   {:else}
     <p class="status">Loading layout...</p>
   {/if}

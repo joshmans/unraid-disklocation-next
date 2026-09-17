@@ -3,6 +3,11 @@
   "name": "Classic",
   "description": "Flat, abstract bay swatch matching the original unraid-disklocation plugin's look.",
   "unofficial": false,
+  "ledColors": {
+    "ok": "#4a9d5f",
+    "warn": "#d9a72e",
+    "critical": "#c9463c"
+  },
   "overlays": {
     "horizontal": {
       "led": {

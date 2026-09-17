@@ -1,7 +1,8 @@
 <script lang="ts">
-  import type { ChassisLayout, BayGroup, PcieGroup, BayConfig, LogoConfig, Orientation } from "./chassis";
+  import type { ChassisLayout, BayGroup, PcieGroup, BayConfig, LogoConfig, LedColorConfig, DriveStatus, Orientation } from "./chassis";
   import { skins } from "./trayskins";
   import { pcieCarriers } from "./pciecarriers";
+  import { resolveLedColor } from "./status";
 
   // App.svelte owns the fetch/persist and the assignments this layout's bay
   // ids get joined against elsewhere, so it stays the single source of truth
@@ -10,7 +11,12 @@
   // the result and show success/failure inline).
   export let initialLayout: ChassisLayout;
   export let initialLogos: LogoConfig;
-  export let save: (layout: ChassisLayout, logos: LogoConfig) => Promise<{ ok: boolean; error?: string }>;
+  export let initialLedColors: LedColorConfig;
+  export let save: (
+    layout: ChassisLayout,
+    logos: LogoConfig,
+    ledColors: LedColorConfig,
+  ) => Promise<{ ok: boolean; error?: string }>;
 
   function clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value));
@@ -18,8 +24,12 @@
 
   let layout: ChassisLayout = clone(initialLayout);
   let logos: LogoConfig = { ...initialLogos };
+  let ledColors: LedColorConfig = clone(initialLedColors);
   let status: "idle" | "saving" | "saved" | "error" = "idle";
   let errorMessage = "";
+
+  const LED_STATUSES: DriveStatus[] = ["ok", "warn", "critical"];
+  const LED_STATUS_LABELS: Record<DriveStatus, string> = { ok: "OK", warn: "Warn", critical: "Critical" };
 
   function buildBays(rows: number, columns: number, existing: BayConfig[]): BayConfig[] {
     const byPos = new Map(existing.map((b) => [`${b.row}-${b.col}`, b]));
@@ -93,10 +103,20 @@
     logos = { ...logos, [skinId]: url };
   }
 
+  function setLedColor(skinId: string, ledStatus: DriveStatus, color: string) {
+    ledColors = { ...ledColors, [skinId]: { ...ledColors[skinId], [ledStatus]: color } };
+  }
+
+  function resetLedColors(skinId: string) {
+    const next = { ...ledColors };
+    delete next[skinId];
+    ledColors = next;
+  }
+
   async function onSaveClick() {
     status = "saving";
     errorMessage = "";
-    const result = await save(clone(layout), { ...logos });
+    const result = await save(clone(layout), { ...logos }, clone(ledColors));
     if (result.ok) {
       status = "saved";
       setTimeout(() => {
@@ -203,6 +223,30 @@
     </label>
   {/each}
 
+  <h3>LED colors</h3>
+  <p class="hint">
+    Each skin has its own default status-LED color (real trays don't all blink the same color) -
+    override any of them here. Reset clears an override back to that skin's default.
+  </p>
+  {#each skins as s (s.id)}
+    <div class="led-row">
+      <span class="skin-name">{s.name}</span>
+      {#each LED_STATUSES as st (st)}
+        <label class="led-swatch">
+          {LED_STATUS_LABELS[st]}
+          <input
+            type="color"
+            value={resolveLedColor(s, ledColors, st)}
+            on:input={(e) => setLedColor(s.id, st, e.currentTarget.value)}
+          />
+        </label>
+      {/each}
+      {#if ledColors[s.id]}
+        <button type="button" class="remove" on:click={() => resetLedColors(s.id)}>Reset</button>
+      {/if}
+    </div>
+  {/each}
+
   <div class="save-row">
     <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
       {status === "saving" ? "Saving..." : "Save layout"}
@@ -278,6 +322,32 @@
   }
   .logo-row input {
     flex: 1;
+  }
+  .led-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 6px 0;
+  }
+  .led-row .skin-name {
+    width: 110px;
+    flex: 0 0 auto;
+  }
+  .led-swatch {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #78776f;
+  }
+  .led-swatch input[type="color"] {
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid rgba(36, 36, 32, 0.25);
+    border-radius: 3px;
+    background: none;
+    cursor: pointer;
   }
   .save-row {
     display: flex;

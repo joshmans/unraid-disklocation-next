@@ -4,6 +4,11 @@
   "description": "Modeled on the SuperMicro SC93301/SC933-era caddy: black bezel, burgundy latch with an LED window.",
   "unofficial": true,
   "disclaimer": "Unofficial, fan-styled recreation. Not affiliated with or endorsed by Super Micro Computer, Inc.",
+  "ledColors": {
+    "ok": "#4a9d5f",
+    "warn": "#d9a72e",
+    "critical": "#c9463c"
+  },
   "overlays": {
     "horizontal": {
       "led": {

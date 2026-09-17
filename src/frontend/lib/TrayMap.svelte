@@ -1,14 +1,17 @@
 <script lang="ts">
-  import type { ChassisLayout, BayDrive, LogoConfig } from "./chassis";
+  import type { ChassisLayout, BayDrive, LogoConfig, LedColorConfig } from "./chassis";
   import { skins } from "./trayskins";
   import TraySkin from "./TraySkin.svelte";
   import PcieCarrier from "./PcieCarrier.svelte";
+  import { resolveLedColor } from "./status";
 
   export let layout: ChassisLayout;
   /** Keyed by BayConfig.id (bays) or `${cardId}-m${index}` (PCIe modules); no entry = empty. */
   export let drives: Record<string, BayDrive> = {};
   /** Manufacturer logo URL per tray-skin id (see assets/tray-skins/README.md); no entry = no logo overlay. */
   export let logos: LogoConfig = {};
+  /** Status-LED color overrides per tray-skin id; no entry = that skin's own meta.json default. */
+  export let ledColors: LedColorConfig = {};
 
   $: skinById = new Map(skins.map((s) => [s.id, s]));
 </script>
@@ -39,6 +42,7 @@
                   driveType={drive.driveType}
                   label={drive.label}
                   logoUrl={logos[bay.skinId] ?? null}
+                  ledColor={resolveLedColor(skin, ledColors, drive.status)}
                 />
               {:else}
                 <div

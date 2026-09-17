@@ -215,18 +215,30 @@ data*.
   the Locate mechanic actually produces a visible LED blink on real hot-swap hardware - that
   needs the daemon physically running on the box (GraphQL has no way to trigger or observe it),
   which didn't happen this session.
+- **Per-skin default LED color, with a user override per skin/status.** Real trays don't agree
+  on one green/amber/red convention - NetApp DS-series shelves are commonly blue for normal
+  status rather than green, for instance (a general-knowledge call, not verified against a real
+  NetApp shelf this session - flagging it the same way the vendor-styled skins themselves flag
+  unverified visual details). So each skin's `meta.json` now carries its own `ledColors: {ok,
+  warn, critical}` default (all five other skins keep the original green/amber/red;
+  [netapp/meta.json](assets/tray-skins/netapp/meta.json) is `#2f6fd6`/amber/red) -
+  [assets/tray-skins/README.md](assets/tray-skins/README.md) documents the field for
+  contributors. [status.ts](src/frontend/lib/status.ts)'s `resolveLedColor(skin, overrides,
+  status)` picks user override > skin default > the old hardcoded default, in that order.
+  The settings UI's new "LED colors" section gives every skin three `<input type="color">`
+  swatches (one per status) pre-filled with whatever's currently resolved, plus a Reset button
+  that clears back to the skin's own default; overrides persist in the same `StoredLayout`
+  document as everything else (`ledColors: LedColorConfig`, keyed by skin id then status).
+  Verified in a real browser against the real daemon: confirmed all six skins' defaults resolve
+  correctly (five green/amber/red, NetApp blue/amber/red) on an actually-rendered tray, set an
+  override through the color picker and watched the tray's LED update immediately, reloaded the
+  page and confirmed the override survived, then hit Reset and confirmed it reverted to the
+  skin's own default color on the real rendered tray.
 
 ## Open questions (not yet decided)
 
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
-- **Per-skin LED color, not one hardcoded status→color mapping.** `status.ts`'s `statusColor()`
-  currently assumes every skin uses the same green/amber/red traffic-light convention for its
-  activity/status LED. Real trays don't agree: different vendors/models blink green, blink
-  blue, use amber or red for faults, or split activity and fault across two separate LEDs
-  entirely. This probably wants to move into each skin's `meta.json` (e.g. a per-status color
-  map, or separate activity-LED vs fault-LED anchors) rather than staying a single shared
-  function - needs a design pass before implementing, not decided yet.
 
 ## Conventions carried forward
 

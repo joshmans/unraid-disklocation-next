@@ -9,11 +9,13 @@
   export let driveType: "hdd" | "ssd" | "nvme" = "hdd";
   export let label = "";
   export let logoUrl: string | null = null;
+  /** Resolved final color for the current status (see status.ts's resolveLedColor) - callers that don't care about per-skin/user overrides can omit this and get the plain default. */
+  export let ledColor: string | undefined = undefined;
 
   $: vb = orientation === "horizontal" ? { w: 220, h: 64 } : { w: 76, h: 190 };
   $: svgMarkup = orientation === "horizontal" ? skin.svg.horizontal : skin.svg.vertical;
   $: o = skin.overlays[orientation];
-  $: ledColor = statusColor(status);
+  $: resolvedLedColor = ledColor ?? statusColor(status);
   $: iconColor = driveIconColors[driveType] ?? "#666";
   $: iconSvg = driveIconSvg[driveType] ?? "";
 
@@ -27,7 +29,7 @@
 
   <div
     class="led"
-    style="left:{pct(o.led.cx ?? 0, vb.w)};top:{pct(o.led.cy ?? 0, vb.h)};width:{pct((o.led.r ?? 4) * 2, vb.w)};background:{ledColor}"
+    style="left:{pct(o.led.cx ?? 0, vb.w)};top:{pct(o.led.cy ?? 0, vb.h)};width:{pct((o.led.r ?? 4) * 2, vb.w)};background:{resolvedLedColor}"
   ></div>
 
   <div

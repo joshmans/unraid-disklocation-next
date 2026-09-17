@@ -14,6 +14,7 @@ export type {
   ChassisLayout,
   LogoConfig,
   Assignments,
+  LedColorConfig,
   StoredLayout,
 } from "../../shared/chassis-types.js";
 
@@ -82,3 +83,6 @@ export const exampleDrives: Record<string, BayDrive> = {
 
 /** Manufacturer logo URL per tray-skin id, applied to every bay using that skin. Empty until the settings UI is used. */
 export const exampleLogos: Record<string, string> = {};
+
+/** LED color overrides per tray-skin id. Empty by default - each skin's own meta.json default (see status.ts's resolveLedColor) applies until the user overrides one here. */
+export const exampleLedColors: LedColorConfig = {};

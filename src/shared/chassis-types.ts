@@ -65,9 +65,20 @@ export type LogoConfig = Record<string, string>;
 /** Which physical disk (by serial number, stable across reboots/device renumbering) occupies which bay/module id. */
 export type Assignments = Record<string, string>;
 
+/**
+ * Per-skin status-LED color overrides, keyed by skin id then status. Each
+ * skin's meta.json declares its own defaults (real trays don't agree on one
+ * green/amber/red convention - some blink blue, some split activity/fault
+ * across two LEDs); this only holds the user's explicit overrides on top of
+ * those defaults, so an unset entry here just means "use the skin's own".
+ */
+export type LedColorConfig = Record<string, Partial<Record<DriveStatus, string>>>;
+
 export interface StoredLayout {
   layout: ChassisLayout;
   logos: LogoConfig;
   /** Optional for backward compatibility with layout.json files saved before assignment existed. */
   assignments?: Assignments;
+  /** Optional for backward compatibility with layout.json files saved before LED color overrides existed. */
+  ledColors?: LedColorConfig;
 }

@@ -42,6 +42,7 @@ skin (see existing skins for the wording pattern).
   "description": "One sentence - what this models and why it looks the way it does.",
   "unofficial": false,
   "disclaimer": "Only present when unofficial is true.",
+  "ledColors": { "ok": "#4a9d5f", "warn": "#d9a72e", "critical": "#c9463c" },
   "overlays": {
     "horizontal": {
       "led": { "cx": 0, "cy": 0, "r": 4 },
@@ -54,7 +55,11 @@ skin (see existing skins for the wording pattern).
 }
 ```
 
-- `led`: a filled circle showing SMART/health status color (green/amber/red).
+- `ledColors`: optional. This skin's default status-LED colors - real hardware doesn't all use the
+  same green/amber/red convention (some blink blue, some split activity/fault across two LEDs).
+  Any status left out falls back to the app's own default (green/amber/red). Users can still
+  override any of these per-skin from the settings UI; this is just what a fresh install shows.
+- `led`: a filled circle showing SMART/health status color (per `ledColors` above, or a user override).
 - `icon`: a filled circle behind the HDD/SSD/NVMe glyph (see
   `../drive-icons/`).
 - `logo`: top-left corner of a square slot for the user's configured
