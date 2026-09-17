@@ -241,9 +241,14 @@
           />
         </label>
       {/each}
-      {#if ledColors[s.id]}
-        <button type="button" class="remove" on:click={() => resetLedColors(s.id)}>Reset</button>
-      {/if}
+      <button
+        type="button"
+        class="remove"
+        disabled={!ledColors[s.id]}
+        on:click={() => resetLedColors(s.id)}
+      >
+        Reset
+      </button>
     </div>
   {/each}
 
@@ -381,6 +386,10 @@
   }
   .settings :global(button.remove) {
     color: var(--accent-critical);
+  }
+  .settings :global(button:disabled) {
+    opacity: 0.4;
+    cursor: default;
   }
   .ok {
     color: var(--accent-ok);
