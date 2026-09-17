@@ -10,8 +10,10 @@
   export let layout: ChassisLayout;
   export let disks: DiskResult[] | null;
   export let disksError = "";
+  export let disksLoading = false;
   export let assignments: Assignments;
   export let save: (assignments: Assignments) => Promise<{ ok: boolean; error?: string }>;
+  export let redetect: () => Promise<void>;
 
   let locating = new Set<string>();
   let selectedBay: Record<string, string> = {};
@@ -100,55 +102,66 @@
 
 <div class="assignment">
   {#if layout.groups.length === 0}
-    <p class="hint">Define at least one bay or PCIe group in the Settings tab before assigning disks.</p>
-  {:else if disksError}
-    <p class="err">
-      Couldn't load drives from unraid-api: {disksError}. The daemon needs an API key/URL saved
-      (see README) before drives can be listed here.
+    <p class="hint">
+      Define at least one bay or PCIe group in the Settings tab before assigning disks. A disk
+      detection will be triggered once a group is detected.
     </p>
-  {:else if disks === null}
-    <p class="hint">Loading drives...</p>
   {:else}
     <div class="section-header">
-      <h3>Unassigned drives ({unassignedDisks.length})</h3>
-      {#if locating.size > 0}
-        <button type="button" on:click={stopAllLocate}>Stop all locate ({locating.size})</button>
-      {/if}
+      <h3>Detected drives</h3>
+      <button type="button" on:click={redetect} disabled={disksLoading}>
+        {disksLoading ? "Detecting..." : "Force (re)detect"}
+      </button>
     </div>
-    {#if unassignedDisks.length === 0}
-      <p class="hint">Every detected drive is assigned to a bay.</p>
-    {/if}
-    {#each unassignedDisks as disk (disk.id)}
-      <div class="drive-row">
-        <div class="drive-info">
-          <strong>{disk.vendor} {disk.name}</strong>
-          <span class="mono">{disk.serialNum}</span>
-          <span class="hint">{disk.interfaceType} - {(disk.size / 1e9).toFixed(0)} GB</span>
+    {#if disksError}
+      <p class="err">
+        Couldn't load drives from unraid-api: {disksError}. The daemon needs an API key/URL saved
+        (see README) before drives can be listed here.
+      </p>
+    {:else if disks === null}
+      <p class="hint">Loading drives...</p>
+    {:else}
+      <div class="section-header">
+        <h3>Unassigned drives ({unassignedDisks.length})</h3>
+        {#if locating.size > 0}
+          <button type="button" on:click={stopAllLocate}>Stop all locate ({locating.size})</button>
+        {/if}
+      </div>
+      {#if unassignedDisks.length === 0}
+        <p class="hint">Every detected drive is assigned to a bay.</p>
+      {/if}
+      {#each unassignedDisks as disk (disk.id)}
+        <div class="drive-row">
+          <div class="drive-info">
+            <strong>{disk.vendor} {disk.name}</strong>
+            <span class="mono">{disk.serialNum}</span>
+            <span class="hint">{disk.interfaceType} - {(disk.size / 1e9).toFixed(0)} GB</span>
+          </div>
+          <button type="button" class:active={locating.has(disk.device)} on:click={() => toggleLocate(disk.device)}>
+            {locating.has(disk.device) ? "Stop" : "Locate"}
+          </button>
+          <select bind:value={selectedBay[disk.serialNum]}>
+            <option value="">Assign to...</option>
+            {#each emptySlots as slot (slot.id)}
+              <option value={slot.id}>{slot.label}</option>
+            {/each}
+          </select>
+          <button type="button" disabled={!selectedBay[disk.serialNum]} on:click={() => assign(disk)}>Assign</button>
         </div>
-        <button type="button" class:active={locating.has(disk.device)} on:click={() => toggleLocate(disk.device)}>
-          {locating.has(disk.device) ? "Stop" : "Locate"}
-        </button>
-        <select bind:value={selectedBay[disk.serialNum]}>
-          <option value="">Assign to...</option>
-          {#each emptySlots as slot (slot.id)}
-            <option value={slot.id}>{slot.label}</option>
-          {/each}
-        </select>
-        <button type="button" disabled={!selectedBay[disk.serialNum]} on:click={() => assign(disk)}>Assign</button>
-      </div>
-    {/each}
+      {/each}
 
-    <h3>Assigned bays ({Object.keys(assignments).length})</h3>
-    {#if Object.keys(assignments).length === 0}
-      <p class="hint">No bays assigned yet.</p>
+      <h3>Assigned bays ({Object.keys(assignments).length})</h3>
+      {#if Object.keys(assignments).length === 0}
+        <p class="hint">No bays assigned yet.</p>
+      {/if}
+      {#each Object.entries(assignments) as [bayId, serial] (bayId)}
+        <div class="drive-row">
+          <span class="mono">{slotLabel.get(bayId) ?? bayId}</span>
+          <span class="mono">{serial}</span>
+          <button type="button" on:click={() => unassign(bayId)}>Unassign</button>
+        </div>
+      {/each}
     {/if}
-    {#each Object.entries(assignments) as [bayId, serial] (bayId)}
-      <div class="drive-row">
-        <span class="mono">{slotLabel.get(bayId) ?? bayId}</span>
-        <span class="mono">{serial}</span>
-        <button type="button" on:click={() => unassign(bayId)}>Unassign</button>
-      </div>
-    {/each}
   {/if}
   {#if status === "error"}<p class="err">Error: {errorMessage}</p>{/if}
 </div>

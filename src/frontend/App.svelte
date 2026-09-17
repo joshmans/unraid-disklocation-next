@@ -20,6 +20,7 @@
   let liveAssignments: Assignments = {};
   let disks: DiskResult[] | null = null;
   let disksError = "";
+  let disksLoading = false;
   // Split from disks on purpose: /layout is fast, /disks can take 20+
   // seconds on a large real array (unraid-api gathers SMART data per disk
   // under the hood) - the layout/settings/tray-map structure shouldn't sit
@@ -69,16 +70,19 @@
   }
 
   async function loadDisks() {
+    disksLoading = true;
     try {
       const res = await fetch(`${API_BASE}/disks`);
       if (res.ok) {
         disks = await res.json();
+        disksError = "";
       } else {
         disksError = (await res.json())?.error ?? `HTTP ${res.status}`;
       }
     } catch (err) {
       disksError = err instanceof Error ? err.message : String(err);
     }
+    disksLoading = false;
   }
 
   // Real assigned occupancy once disks have loaded; the bundled demo occupancy
@@ -178,7 +182,15 @@
   </section>
 
   <section class="tab-panel" class:hidden={activeTab !== "assign"}>
-    <DiskAssignment layout={liveLayout} {disks} {disksError} assignments={liveAssignments} save={saveAssignments} />
+    <DiskAssignment
+      layout={liveLayout}
+      {disks}
+      {disksError}
+      {disksLoading}
+      assignments={liveAssignments}
+      save={saveAssignments}
+      redetect={loadDisks}
+    />
   </section>
 
   <section class="tab-panel" class:hidden={activeTab !== "settings"}>
