@@ -3,10 +3,11 @@ import { loadSettings } from "./config.js";
 import { loadLayoutConfig, saveLayoutConfig } from "./layout.js";
 import { getDisks } from "./graphql/client.js";
 import { startLocate, stopLocate, stopAllLocate, activeLocateDevices } from "./locate.js";
+import { startNginxSelfHeal } from "./nginx.js";
 
 // Deliberately no web framework - still just node:http. Routes beyond the
 // health check are proxied at /plugins/unraid-disklocation-next/api/ (see
-// plugin/nginx/*.conf, which strips that prefix before forwarding here).
+// nginx.ts, which strips that prefix before forwarding here).
 const PORT = Number(process.env.PORT ?? 3838);
 
 function readBody(req: import("node:http").IncomingMessage): Promise<string> {
@@ -92,4 +93,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`unraid-disklocation-next listening on :${PORT}`);
+  // Only worth registering with nginx once we're actually listening -
+  // otherwise a reload could point it at a port nothing answers on yet.
+  startNginxSelfHeal();
 });

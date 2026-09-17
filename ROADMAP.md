@@ -62,8 +62,9 @@ data*.
   page with a mount `<div>` and a `<script>` tag loading this project's own bundled
   frontend JS - it renders in the same document, not a nested browsing context (iframing
   Unraid's own UI is a known source of breakage, e.g. the Connect plugin's iframe issues on
-  the forums). Skeleton: [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page),
-  [plugin/nginx/unraid-disklocation-next.conf](plugin/nginx/unraid-disklocation-next.conf).
+  the forums). Skeleton: [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page).
+  The nginx registration itself is owned by the daemon at runtime, not a static file - see
+  [src/nginx.ts](src/nginx.ts) and the durability finding below.
   **Corrected against a real box (2026-09), replacing wrong assumptions this bullet used to
   make:**
   - The `.page` file must be installed flat at `/usr/local/emhttp/plugins/<name>/<Basename>.page`
@@ -80,15 +81,29 @@ data*.
     is to persist the snippet under `/boot/config/plugins/<name>/nginx/<name>.conf` (survives
     reboots) and get it pulled in by appending one `include /boot/config/plugins/<name>/nginx/<name>.conf;`
     line into `/etc/nginx/conf.d/locations.conf`.
-  - `/etc/rc.d/rc.nginx reload` **regenerates** `locations.conf` (and presumably other conf.d
-    files) rather than just reloading nginx against whatever's on disk - a hand-appended
-    `include` line there gets silently wiped by it every time. `nginx -s reload` (the raw
-    nginx binary signal, bypassing Unraid's wrapper script) reloads without regenerating.
-    This means a real install script can't just append the include line once at install time
-    and call it done - either it needs to re-assert that line before every `rc.nginx reload`
-    (e.g. from the daemon's own rc.d `start()`), or there's some other Unraid-native
-    registration point (used by `locations.conf`'s generator itself) that survives
-    regeneration, which hasn't been found yet. **Open question, not yet solved** - see below.
+  - `/etc/rc.d/rc.nginx reload` **regenerates** `locations.conf` from a hardcoded heredoc in
+    `build_locations()` (confirmed by reading that script on a real box) rather than just
+    reloading nginx against whatever's on disk - a hand-appended `include` line there gets
+    silently wiped by it every time, and there's no plugin-registration hook in that function
+    to opt into surviving it - not a packaging oversight, just how the stock script works.
+    **Solved (2026-09) by not fighting it - self-heal instead**, following the same real
+    pattern `u-manager-companion`'s own service uses (confirmed by reading its
+    `service/bundle.cjs`): [src/nginx.ts](src/nginx.ts)'s `startNginxSelfHeal()`, called once
+    the daemon is actually listening, (1) writes the include file and appends the `include`
+    line on startup if either is missing, doing a validated `nginx -t && nginx -s reload` only
+    when something actually changed, then (2) `fs.watch`es `locations.conf` itself and, on any
+    change, checks (after a 300ms debounce) whether the include line survived - if not
+    (`rc.nginx reload`/`restart`/`renew` wiped it, for any reason, not just a plugin-install
+    edge case), it re-appends and reloads again. `nginx -s reload` (the raw binary signal,
+    bypassing Unraid's regenerating wrapper) is used for every reload here, same as
+    `u-manager-companion`'s cleanup script does - `rc.nginx reload` would just re-trigger the
+    exact regeneration this is healing from. Verified against scratch files standing in for
+    the real paths (`DISKLOCATION_NEXT_LOCATIONS_CONF`/`_NGINX_INCLUDE`/`_NGINX_BIN` env
+    overrides) and a fake `nginx` binary logging its invocations: cold start appended the line
+    and reloaded once; overwriting the fake `locations.conf` to simulate a real regeneration
+    triggered a heal + reload within ~1s with no manual intervention; touching the file with
+    no content change triggered no reload. Not yet re-verified against the real box's actual
+    `rc.nginx reload` (next step).
 - **Runtime packaging: Node.js + Single Executable Applications (SEA), not Bun.** SEA has
   been stable since Node 22 and streamlined further in Node 24 (`--build-sea`), so the
   `.plg` ships a compiled binary with no separate Node.js install required on the box
@@ -270,11 +285,6 @@ data*.
 
 ## Open questions (not yet decided)
 
-- **How the nginx `locations.conf` include survives `rc.nginx reload`'s regeneration.** See the
-  UI-delivery correction above - a real `.plg` install can't just append the include line once,
-  since a later reload wipes it. Need to find whatever Unraid-native mechanism the generator
-  itself reads (so a plugin's registration survives regeneration the way `u-manager-companion`'s
-  does), or fall back to re-asserting the line from the daemon's own rc.d `start()` every time.
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
 
