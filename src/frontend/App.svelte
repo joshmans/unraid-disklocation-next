@@ -25,6 +25,11 @@
   // under the hood) - the layout/settings/tray-map structure shouldn't sit
   // blocked behind that.
   let layoutLoaded = false;
+  // True once we've confirmed the daemon is reachable AND has no saved
+  // layout yet (a real, unconfigured production install) - as opposed to
+  // the daemon/proxy being unreachable (local dev without it in front),
+  // where falling back to the bundled demo layout is still the right call.
+  let productionEmpty = false;
 
   onMount(() => {
     loadLayout();
@@ -41,6 +46,8 @@
           liveLogos = stored.logos;
           liveAssignments = stored.assignments ?? {};
           liveLedColors = stored.ledColors ?? {};
+        } else {
+          productionEmpty = true;
         }
       }
     } catch {
@@ -134,18 +141,22 @@
        switch back to a tab you already visited. -->
   <section class="tab-panel" class:hidden={activeTab !== "map"}>
     {#if layoutLoaded}
-      <p class="status">
-        {liveLayout.name}
-        {#if !disks}- occupancy shown here is sample data ({disksError || "loading drives..."}).{/if}
-      </p>
-      <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} ledColors={liveLedColors} />
+      {#if productionEmpty}
+        <p class="status">To begin, go to the Settings tab and define at least one tray group.</p>
+      {:else}
+        <p class="status">
+          {liveLayout.name}
+          {#if !disks}- occupancy shown here is sample data ({disksError || "loading drives..."}).{/if}
+        </p>
+        <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} ledColors={liveLedColors} />
 
-      <h2>Drive types</h2>
-      <ul class="legend">
-        {#each Object.entries(driveIconMeta) as [type, info] (type)}
-          <li><strong>{info.name}</strong> - {info.description}</li>
-        {/each}
-      </ul>
+        <h2>Drive types</h2>
+        <ul class="legend">
+          {#each Object.entries(driveIconMeta) as [type, info] (type)}
+            <li><strong>{info.name}</strong> - {info.description}</li>
+          {/each}
+        </ul>
+      {/if}
     {:else}
       <p class="status">Loading layout...</p>
     {/if}
