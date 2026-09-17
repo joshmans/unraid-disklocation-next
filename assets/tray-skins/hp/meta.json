@@ -1,0 +1,53 @@
+{
+  "id": "hp",
+  "name": "HP-style",
+  "description": "Modeled on the HP ProLiant Gen8-10 caddy (651687-001/651314-001): metal body with a round blue release button.",
+  "unofficial": true,
+  "disclaimer": "Unofficial, fan-styled recreation. Not affiliated with or endorsed by HP Inc. or Hewlett Packard Enterprise.",
+  "overlays": {
+    "horizontal": {
+      "led": {
+        "cx": 206,
+        "cy": 12,
+        "r": 4
+      },
+      "icon": {
+        "cx": 40,
+        "cy": 50,
+        "r": 8
+      },
+      "logo": {
+        "x": 198,
+        "y": 42,
+        "size": 16
+      },
+      "label": {
+        "x": 34,
+        "y": 14,
+        "color": "#3a3a37"
+      }
+    },
+    "vertical": {
+      "led": {
+        "cx": 62,
+        "cy": 38,
+        "r": 4
+      },
+      "icon": {
+        "cx": 14,
+        "cy": 176,
+        "r": 8
+      },
+      "logo": {
+        "x": 54,
+        "y": 168,
+        "size": 16
+      },
+      "label": {
+        "x": 8,
+        "y": 40,
+        "color": "#3a3a37"
+      }
+    }
+  }
+}

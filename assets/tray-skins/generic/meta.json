@@ -1,0 +1,52 @@
+{
+  "id": "generic",
+  "name": "Generic sled",
+  "description": "Unbranded hot-swap sled archetype - a tool-less side latch with grip ridges.",
+  "unofficial": false,
+  "overlays": {
+    "horizontal": {
+      "led": {
+        "cx": 206,
+        "cy": 12,
+        "r": 4
+      },
+      "icon": {
+        "cx": 40,
+        "cy": 50,
+        "r": 8
+      },
+      "logo": {
+        "x": 198,
+        "y": 42,
+        "size": 16
+      },
+      "label": {
+        "x": 34,
+        "y": 14,
+        "color": "#5c5b56"
+      }
+    },
+    "vertical": {
+      "led": {
+        "cx": 62,
+        "cy": 38,
+        "r": 4
+      },
+      "icon": {
+        "cx": 14,
+        "cy": 176,
+        "r": 8
+      },
+      "logo": {
+        "x": 54,
+        "y": 168,
+        "size": 16
+      },
+      "label": {
+        "x": 8,
+        "y": 40,
+        "color": "#5c5b56"
+      }
+    }
+  }
+}

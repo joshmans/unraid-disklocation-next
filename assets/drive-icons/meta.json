@@ -1,0 +1,5 @@
+{
+  "hdd": { "name": "HDD", "description": "spinning platters", "color": "#3a6ea5" },
+  "ssd": { "name": "SSD", "description": "solid state, no moving parts", "color": "#2f9e6e" },
+  "nvme": { "name": "NVMe", "description": "PCIe-attached flash", "color": "#8a4fc9" }
+}

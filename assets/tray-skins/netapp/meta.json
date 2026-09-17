@@ -1,0 +1,53 @@
+{
+  "id": "netapp",
+  "name": "NetApp-style",
+  "description": "Modeled on the NetApp DS4246 disk shelf carrier: bluish-gray body, full-width flip handle, vent grille, and edge light-pipe indicators.",
+  "unofficial": true,
+  "disclaimer": "Unofficial, fan-styled recreation. Not affiliated with or endorsed by NetApp, Inc.",
+  "overlays": {
+    "horizontal": {
+      "led": {
+        "cx": 204,
+        "cy": 18,
+        "r": 2.5
+      },
+      "icon": {
+        "cx": 14,
+        "cy": 50,
+        "r": 8
+      },
+      "logo": {
+        "x": 198,
+        "y": 42,
+        "size": 16
+      },
+      "label": {
+        "x": 8,
+        "y": 32,
+        "color": "#20242a"
+      }
+    },
+    "vertical": {
+      "led": {
+        "cx": 61,
+        "cy": 18,
+        "r": 2.5
+      },
+      "icon": {
+        "cx": 14,
+        "cy": 176,
+        "r": 8
+      },
+      "logo": {
+        "x": 54,
+        "y": 168,
+        "size": 16
+      },
+      "label": {
+        "x": 8,
+        "y": 32,
+        "color": "#20242a"
+      }
+    }
+  }
+}

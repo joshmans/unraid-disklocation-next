@@ -116,10 +116,46 @@ data*.
   good design and the plan is to carry the *idea* forward using `node:sqlite` (see runtime
   packaging above), fed by this plugin's own `smartctl` calls per the finding above - not
   yet built.
-- **How much of the tray-map UI carries over conceptually vs. needs rebuilding.** The
-  tray/bay visual metaphor is the whole point of this plugin and should carry over; the
-  actual rendering will be rebuilt from scratch (frontend framework/bundler not yet chosen),
-  not ported.
+- **Frontend framework: Svelte, built with Vite.** Chosen for a widget mounted directly
+  into someone else's page (no iframe, per the UI-delivery decision above): Svelte compiles
+  away to plain JS with no runtime framework object to load, and its scoped-by-default CSS
+  and built-in transitions suit a small, visually-controlled widget better than shipping a
+  full framework runtime. Verified with a real build, not just assumed - see below.
+- **Tray-map visuals: a contributable, directory-discovered skin system**, not a hardcoded
+  set of hand-picked designs. Each skin is a plain SVG pair (`horizontal.svg` /
+  `vertical.svg` - real hardware mounts 3.5" drives flat/wide and 2.5" drives on edge/narrow,
+  and either orientation should be selectable regardless of drive size) plus a `meta.json`
+  declaring anchor points for four runtime overlays: SMART-status LED, drive-type icon,
+  optional manufacturer logo, and a serial/model label. Skins draw only the hardware shell -
+  never the dynamic bits, and never a manufacturer logo (logos stay exclusively on the
+  existing user-configured logo framework, so a skin PR carries no trademark risk).
+  [assets/tray-skins/README.md](assets/tray-skins/README.md) is the contribution guide.
+  The frontend enumerates skins via `import.meta.glob('assets/tray-skins/*/meta.json')` at
+  build time - adding a skin is a new directory and a PR, no code change. Shipped with six
+  skins: a `classic` flat swatch (matching the original plugin), an unbranded `generic`
+  archetype, and four vendor-styled ones researched against real part numbers rather than
+  memory (SuperMicro SC93301, Dell 8FKXC/PowerEdge 13th-gen, HP 651687-001/651314-001,
+  NetApp DS4246) - each corrected at least once after checking an actual product photo
+  turned up a detail (Dell's orange accent ring, not a blue latch) that general recollection
+  had wrong. Built and rendered end-to-end in a real browser against the compiled
+  `dist/frontend.js` before being called done - see [src/frontend/](src/frontend/).
+- **Drive-type icons**: real distinct silhouettes, not three variations on a rounded
+  rectangle - HDD is a platter+arm circle, SSD is a flat rectangular drive body, NVMe is a
+  notched gumstick (the actual M.2 module shape). [assets/drive-icons/](assets/drive-icons/).
+
+## Open questions (not yet decided)
+
+- **The actual tray-map grid**: this session built a one-skin-at-a-time preview
+  (`src/frontend/App.svelte`) to prove the skin-discovery and overlay mechanism works, not
+  the real layout - arranging many `TraySkin` instances into a grid matching a user-defined
+  physical chassis (rows/columns, or the PCIe-carrier grouping below) is still unbuilt.
+- **PCIe NVMe carrier as a live component.** [assets/pcie-carrier/default.svg](assets/pcie-carrier/default.svg)
+  is a static shell (frame, heatsink, edge connector); the per-module rows (icon, serial,
+  count driven by the x8/x16/bay-count config) still need a Svelte component, analogous to
+  `TraySkin.svelte`, rather than being baked into the SVG.
+- **Where the manufacturer-logo URL and per-bay skin/orientation choice get configured** -
+  a settings UI (likely a form on this same page) that writes to this plugin's own config
+  store, feeding the `logoUrl` prop `TraySkin.svelte` already accepts.
 
 ## Conventions carried forward
 

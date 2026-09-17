@@ -1,0 +1,53 @@
+{
+  "id": "dell",
+  "name": "Dell-style",
+  "description": "Modeled on the Dell 8FKXC/PowerEdge 13th-gen caddy (R630/R730/T430-era): black bezel with an orange accent ring and a waffle-textured grip patch.",
+  "unofficial": true,
+  "disclaimer": "Unofficial, fan-styled recreation. Not affiliated with or endorsed by Dell Technologies.",
+  "overlays": {
+    "horizontal": {
+      "led": {
+        "cx": 206,
+        "cy": 12,
+        "r": 4
+      },
+      "icon": {
+        "cx": 40,
+        "cy": 50,
+        "r": 8
+      },
+      "logo": {
+        "x": 198,
+        "y": 42,
+        "size": 16
+      },
+      "label": {
+        "x": 34,
+        "y": 14,
+        "color": "#c7c8ca"
+      }
+    },
+    "vertical": {
+      "led": {
+        "cx": 62,
+        "cy": 38,
+        "r": 4
+      },
+      "icon": {
+        "cx": 14,
+        "cy": 176,
+        "r": 8
+      },
+      "logo": {
+        "x": 54,
+        "y": 168,
+        "size": 16
+      },
+      "label": {
+        "x": 8,
+        "y": 40,
+        "color": "#c7c8ca"
+      }
+    }
+  }
+}
