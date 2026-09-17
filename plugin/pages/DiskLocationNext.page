@@ -1,6 +1,6 @@
 Menu="Tools"
 Icon="server"
-Title="Disk Location"
+Title="Disk Location Next"
 ---
 <?php
 // Thin shell only, deliberately no PHP logic beyond this - the real UI is
