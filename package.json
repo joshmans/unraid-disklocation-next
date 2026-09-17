@@ -1,5 +1,5 @@
 {
-  "name": "disklocation-next",
+  "name": "unraid-disklocation-next",
   "version": "0.0.0",
   "private": true,
   "description": "Standalone TypeScript service that maps Unraid drives to a tray/bay layout via the unraid-api GraphQL interface",
