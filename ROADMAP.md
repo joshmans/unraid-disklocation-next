@@ -203,19 +203,30 @@ data*.
   path against a local mock GraphQL server standing in for unraid-api (real request/response
   shape) - assigned a disk to a bay through the actual UI, watched the tray map render its real
   derived icon color/status LED/serial label, unassigned it, and confirmed persistence and the
-  locate-stops-on-assign behavior via the real running daemon throughout. Not verified: that
-  this actually produces a visible LED blink on a real spinning drive in a real hot-swap bay -
-  no physical hardware access this session, and unraid-api's `disks.type` field's exact values
-  for distinguishing SSD from spinning HDD were never confirmed either (see derive-drive.ts's
-  comment) - both would benefit from a pass against a live box.
+  locate-stops-on-assign behavior via the real running daemon throughout.
+- **`derive-drive.ts`'s field-shape guesses confirmed against a live 43-disk array (2026-09).**
+  Re-ran the `disks` query against the same real box used for the original schema
+  verification: `device` really does come back as a full path (`/dev/sda`, `/dev/nvme5n1`,
+  ...), which `locate.ts`'s `normalizeDevice()` already handled defensively either way, and
+  `type` really is `"HD"` / `"SSD"` / `"NVMe"`, which the existing `/ssd/i` substring check and
+  the `interfaceType === "PCIE"` check correctly classify - no code changes needed, this just
+  confirms the guesses were right. `smartStatus` was `"OK"` for every drive except one USB boot
+  device (`"UNKNOWN"`), matching the documented OK/UNKNOWN-only shape. Still not verified: that
+  the Locate mechanic actually produces a visible LED blink on real hot-swap hardware - that
+  needs the daemon physically running on the box (GraphQL has no way to trigger or observe it),
+  which didn't happen this session.
 
 ## Open questions (not yet decided)
 
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
-- **`isSpinning`/`type` on the `disks` query aren't enough to fully distinguish HDD vs SSD**
-  (see derive-drive.ts) - worth another look against a live box now that there's a concrete
-  place (icon selection) where getting it wrong is visible, not just theoretical.
+- **Per-skin LED color, not one hardcoded status→color mapping.** `status.ts`'s `statusColor()`
+  currently assumes every skin uses the same green/amber/red traffic-light convention for its
+  activity/status LED. Real trays don't agree: different vendors/models blink green, blink
+  blue, use amber or red for faults, or split activity and fault across two separate LEDs
+  entirely. This probably wants to move into each skin's `meta.json` (e.g. a per-status color
+  map, or separate activity-LED vs fault-LED anchors) rather than staying a single shared
+  function - needs a design pass before implementing, not decided yet.
 
 ## Conventions carried forward
 
