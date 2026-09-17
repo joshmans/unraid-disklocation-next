@@ -4,7 +4,7 @@
   import Settings from "./lib/Settings.svelte";
   import DiskAssignment from "./lib/DiskAssignment.svelte";
   import { driveIconMeta } from "./lib/driveicons";
-  import { exampleLayout, exampleDrives, exampleLogos, exampleLedColors } from "./lib/chassis";
+  import { exampleLayout, exampleDrives, exampleLogos, exampleLedColors, emptyLayout } from "./lib/chassis";
   import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive } from "./lib/chassis";
   import type { DiskResult } from "../graphql/queries";
   import { driveFromDisk } from "../shared/derive-drive";
@@ -48,6 +48,9 @@
           liveLedColors = stored.ledColors ?? {};
         } else {
           productionEmpty = true;
+          liveLayout = emptyLayout;
+          liveLogos = {};
+          liveLedColors = {};
         }
       }
     } catch {

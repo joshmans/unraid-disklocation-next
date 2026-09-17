@@ -86,3 +86,6 @@ export const exampleLogos: Record<string, string> = {};
 
 /** LED color overrides per tray-skin id. Empty by default - each skin's own meta.json default (see status.ts's resolveLedColor) applies until the user overrides one here. */
 export const exampleLedColors: LedColorConfig = {};
+
+/** Real starting point for an unconfigured production install - no demo groups to delete before you can start defining your own chassis. */
+export const emptyLayout: ChassisLayout = { id: "custom", name: "My chassis", groups: [] };
