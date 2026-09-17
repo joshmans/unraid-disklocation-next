@@ -13,6 +13,7 @@ export type {
   Group,
   ChassisLayout,
   LogoConfig,
+  Assignments,
   StoredLayout,
 } from "../../shared/chassis-types.js";
 

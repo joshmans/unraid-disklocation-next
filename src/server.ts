@@ -1,12 +1,12 @@
 import { createServer } from "node:http";
 import { loadSettings } from "./config.js";
 import { loadLayoutConfig, saveLayoutConfig } from "./layout.js";
+import { getDisks } from "./graphql/client.js";
+import { startLocate, stopLocate, stopAllLocate, activeLocateDevices } from "./locate.js";
 
-// Deliberately no web framework - still just node:http. /layout is the
-// first real route beyond the health check: the frontend's settings UI
-// reads/writes the chassis layout + logo config through it, proxied at
-// /plugins/unraid-disklocation-next/api/ (see plugin/nginx/*.conf, which
-// strips that prefix before forwarding here).
+// Deliberately no web framework - still just node:http. Routes beyond the
+// health check are proxied at /plugins/unraid-disklocation-next/api/ (see
+// plugin/nginx/*.conf, which strips that prefix before forwarding here).
 const PORT = Number(process.env.PORT ?? 3838);
 
 function readBody(req: import("node:http").IncomingMessage): Promise<string> {
@@ -39,6 +39,46 @@ const server = createServer(async (req, res) => {
       saveLayoutConfig(config);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: String(err) }));
+    }
+    return;
+  }
+
+  if (req.url === "/disks" && req.method === "GET") {
+    const settings = loadSettings();
+    if (!settings) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "not configured - no unraid-api URL/key saved yet" }));
+      return;
+    }
+    try {
+      const disks = await getDisks(settings);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(disks));
+    } catch (err) {
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: String(err) }));
+    }
+    return;
+  }
+
+  if (req.url === "/locate" && req.method === "GET") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ devices: activeLocateDevices() }));
+    return;
+  }
+
+  if (req.url === "/locate" && req.method === "POST") {
+    try {
+      const { device, action } = JSON.parse(await readBody(req));
+      if (action === "start") startLocate(device);
+      else if (action === "stop") stopLocate(device);
+      else if (action === "stopAll") stopAllLocate();
+      else throw new Error('action must be "start", "stop", or "stopAll"');
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, devices: activeLocateDevices() }));
     } catch (err) {
       res.writeHead(400, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: false, error: String(err) }));

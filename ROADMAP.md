@@ -178,17 +178,44 @@ data*.
   `POST /layout` handler, reloaded the page, and confirmed both the settings form and the tray
   map picked the saved config back up, including a configured logo URL actually rendering on
   the tray it was assigned to.
+- **Live disk-to-bay assignment, with a Locate button to identify drives before assigning
+  them.** [DiskAssignment.svelte](src/frontend/lib/DiskAssignment.svelte) lists every disk from
+  `GET /disks` (a new backend route that calls the already-verified `getDisks()` GraphQL query)
+  that isn't yet in the `assignments` map (bay/module id -> disk serial number - serial rather
+  than `/dev/sdX` because device names aren't stable across reboots), lets the user pick an
+  empty bay/module for it, and persists that mapping through the same `POST /layout` document
+  as the settings UI (now `{layout, logos, assignments}`). [derive-drive.ts](src/shared/derive-drive.ts)
+  turns an assigned disk into the `BayDrive` `TrayMap`/`PcieCarrier` already know how to render
+  (driveType from `interfaceType`/`type`, status from `smartStatus`).
+  **Locate**: the original plugin's "Locate" button worked by hammering a drive with `smartctl`
+  in a loop, since read-only SMART queries are enough I/O to make a hot-swap bay's activity LED
+  blink noticeably. [locate.ts](src/locate.ts) reimplements that same mechanic directly (not the
+  original's compiled `smartlocate` binary) - `smartctl -a <device>` every 700ms via `execFile`
+  with an argv array (never a shell string, so a device name can't inject anything), with the
+  raw input strictly validated down to a bare alphanumeric name before a path is ever
+  constructed from it, and a 5-minute auto-stop safety net in case the UI never sends stop.
+  Each unassigned drive gets a Locate/Stop toggle; assigning a drive stops its locate session
+  automatically. Verified for real, not mocked: ran the actual compiled route against a local
+  `smartctl` (installed for this), confirmed with an instrumented wrapper that starting locate
+  produces real repeating `smartctl -a <device>` calls on a ~700ms cadence and stopping it
+  halts them immediately with zero further calls; confirmed device-name validation rejects
+  shell-metacharacter and path-traversal payloads outright; and exercised the full assignment
+  path against a local mock GraphQL server standing in for unraid-api (real request/response
+  shape) - assigned a disk to a bay through the actual UI, watched the tray map render its real
+  derived icon color/status LED/serial label, unassigned it, and confirmed persistence and the
+  locate-stops-on-assign behavior via the real running daemon throughout. Not verified: that
+  this actually produces a visible LED blink on a real spinning drive in a real hot-swap bay -
+  no physical hardware access this session, and unraid-api's `disks.type` field's exact values
+  for distinguishing SSD from spinning HDD were never confirmed either (see derive-drive.ts's
+  comment) - both would benefit from a pass against a live box.
 
 ## Open questions (not yet decided)
 
-- **Live disk-to-bay assignment.** The settings UI above configures which *skin/orientation* a
-  bay or PCIe module uses, not which *physical disk* currently occupies it - `TrayMap`/
-  `PcieCarrier` already accept a `drives` map keyed by bay/module id, but nothing populates
-  that map from the real `disks`/`array` GraphQL queries yet (see the schema findings above -
-  unraid-api has no bay concept, so this mapping has to be either inferred from something
-  stable per bay, like drive serial number pinned to a bay id by the user, or exposed as a
-  step in the settings UI itself). Until this exists, a saved custom layout always renders
-  with every bay/module empty.
+- **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
+  physical slot** - assignment only works against slots the layout editor already created.
+- **`isSpinning`/`type` on the `disks` query aren't enough to fully distinguish HDD vs SSD**
+  (see derive-drive.ts) - worth another look against a live box now that there's a concrete
+  place (icon selection) where getting it wrong is visible, not just theoretical.
 
 ## Conventions carried forward
 

@@ -4,9 +4,14 @@
   import TraySkin from "./lib/TraySkin.svelte";
   import TrayMap from "./lib/TrayMap.svelte";
   import Settings from "./lib/Settings.svelte";
+  import DiskAssignment from "./lib/DiskAssignment.svelte";
   import { driveIconMeta } from "./lib/driveicons";
   import { exampleLayout, exampleDrives, exampleLogos } from "./lib/chassis";
-  import type { ChassisLayout, LogoConfig } from "./lib/chassis";
+  import type { ChassisLayout, LogoConfig, Assignments, BayDrive } from "./lib/chassis";
+  import type { DiskResult } from "../graphql/queries";
+  import { driveFromDisk } from "../shared/derive-drive";
+
+  const API_BASE = "/plugins/unraid-disklocation-next/api";
 
   let selectedId = skins[0]?.id;
   let orientation: "horizontal" | "vertical" = "horizontal";
@@ -15,27 +20,87 @@
 
   let liveLayout: ChassisLayout = exampleLayout;
   let liveLogos: LogoConfig = exampleLogos;
+  let liveAssignments: Assignments = {};
+  let disks: DiskResult[] | null = null;
+  let disksError = "";
   let loaded = false;
 
   onMount(async () => {
     try {
-      const res = await fetch("/plugins/unraid-disklocation-next/api/layout");
+      const res = await fetch(`${API_BASE}/layout`);
       if (res.ok) {
         const stored = await res.json();
         if (stored) {
           liveLayout = stored.layout;
           liveLogos = stored.logos;
+          liveAssignments = stored.assignments ?? {};
         }
       }
     } catch {
       // Daemon/proxy not reachable (e.g. local dev) - fall back to the demo layout.
     }
+
+    try {
+      const res = await fetch(`${API_BASE}/disks`);
+      if (res.ok) {
+        disks = await res.json();
+      } else {
+        disksError = (await res.json())?.error ?? `HTTP ${res.status}`;
+      }
+    } catch (err) {
+      disksError = err instanceof Error ? err.message : String(err);
+    }
+
     loaded = true;
   });
 
-  function onSettingsSave(e: CustomEvent<{ layout: ChassisLayout; logos: LogoConfig }>) {
-    liveLayout = e.detail.layout;
-    liveLogos = e.detail.logos;
+  // Real assigned occupancy once disks have loaded; the bundled demo occupancy
+  // otherwise (unconfigured daemon, or local dev without the proxy in front).
+  $: liveDrives = computeDrives(liveAssignments, disks);
+
+  function computeDrives(assignments: Assignments, disks: DiskResult[] | null): Record<string, BayDrive> {
+    if (!disks) return exampleDrives;
+    const bySerial = new Map(disks.map((d) => [d.serialNum, d]));
+    const result: Record<string, BayDrive> = {};
+    for (const [bayId, serial] of Object.entries(assignments)) {
+      const disk = bySerial.get(serial);
+      if (disk) result[bayId] = driveFromDisk(disk);
+    }
+    return result;
+  }
+
+  async function persistAll(next: {
+    layout?: ChassisLayout;
+    logos?: LogoConfig;
+    assignments?: Assignments;
+  }): Promise<{ ok: boolean; error?: string }> {
+    const merged = {
+      layout: next.layout ?? liveLayout,
+      logos: next.logos ?? liveLogos,
+      assignments: next.assignments ?? liveAssignments,
+    };
+    try {
+      const res = await fetch(`${API_BASE}/layout`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(merged),
+      });
+      if (!res.ok) throw new Error(`save failed: ${res.status}`);
+      liveLayout = merged.layout;
+      liveLogos = merged.logos;
+      liveAssignments = merged.assignments;
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  function saveSettings(layout: ChassisLayout, logos: LogoConfig) {
+    return persistAll({ layout, logos });
+  }
+
+  function saveAssignments(assignments: Assignments) {
+    return persistAll({ assignments });
   }
 </script>
 
@@ -83,15 +148,24 @@
   {#if loaded}
     <h2>Tray map</h2>
     <p class="status">
-      {liveLayout.name} - occupancy shown here is sample data; live disk-to-bay assignment isn't
-      wired up yet, so a saved layout of your own will render with every bay empty until then.
+      {liveLayout.name}
+      {#if !disks}- occupancy shown here is sample data ({disksError || "daemon not reachable"}).{/if}
     </p>
     <div class="map">
-      <TrayMap layout={liveLayout} drives={exampleDrives} logos={liveLogos} />
+      <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} />
     </div>
 
+    <h2>Disk assignment</h2>
+    <DiskAssignment
+      layout={liveLayout}
+      {disks}
+      {disksError}
+      assignments={liveAssignments}
+      save={saveAssignments}
+    />
+
     <h2>Layout settings</h2>
-    <Settings initialLayout={liveLayout} initialLogos={liveLogos} on:save={onSettingsSave} />
+    <Settings initialLayout={liveLayout} initialLogos={liveLogos} save={saveSettings} />
   {:else}
     <p class="status">Loading layout...</p>
   {/if}

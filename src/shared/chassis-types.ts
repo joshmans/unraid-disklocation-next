@@ -62,7 +62,12 @@ export interface ChassisLayout {
 /** Hotlinked manufacturer logo URL per tray-skin id - kept separate from the skins themselves so a skin PR never needs to carry a logo (see assets/tray-skins/README.md). */
 export type LogoConfig = Record<string, string>;
 
+/** Which physical disk (by serial number, stable across reboots/device renumbering) occupies which bay/module id. */
+export type Assignments = Record<string, string>;
+
 export interface StoredLayout {
   layout: ChassisLayout;
   logos: LogoConfig;
+  /** Optional for backward compatibility with layout.json files saved before assignment existed. */
+  assignments?: Assignments;
 }

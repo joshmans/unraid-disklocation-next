@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import type { ChassisLayout, BayGroup, PcieGroup, BayConfig, LogoConfig, Orientation } from "./chassis";
   import { skins } from "./trayskins";
   import { pcieCarriers } from "./pciecarriers";
 
-  const API_BASE = "/plugins/unraid-disklocation-next/api";
-  const dispatch = createEventDispatcher<{ save: { layout: ChassisLayout; logos: LogoConfig } }>();
-
-  // App.svelte owns the initial load (GET /layout, falling back to the demo
-  // layout) so the top-of-page preview and this editor start in sync; this
-  // component only edits the in-memory copy and POSTs it back on save.
+  // App.svelte owns the fetch/persist and the assignments this layout's bay
+  // ids get joined against elsewhere, so it stays the single source of truth
+  // for the whole stored document - this component only edits a draft copy
+  // and hands it back through `save` (a prop, not an event, so it can await
+  // the result and show success/failure inline).
   export let initialLayout: ChassisLayout;
   export let initialLogos: LogoConfig;
+  export let save: (layout: ChassisLayout, logos: LogoConfig) => Promise<{ ok: boolean; error?: string }>;
 
   function clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value));
@@ -94,24 +93,18 @@
     logos = { ...logos, [skinId]: url };
   }
 
-  async function save() {
+  async function onSaveClick() {
     status = "saving";
     errorMessage = "";
-    try {
-      const res = await fetch(`${API_BASE}/layout`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ layout, logos }),
-      });
-      if (!res.ok) throw new Error(`save failed: ${res.status}`);
+    const result = await save(clone(layout), { ...logos });
+    if (result.ok) {
       status = "saved";
-      dispatch("save", { layout: clone(layout), logos: { ...logos } });
       setTimeout(() => {
         if (status === "saved") status = "idle";
       }, 2000);
-    } catch (err) {
+    } else {
       status = "error";
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = result.error ?? "unknown error";
     }
   }
 </script>
@@ -211,7 +204,7 @@
   {/each}
 
   <div class="save-row">
-    <button type="button" on:click={save} disabled={status === "saving"}>
+    <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
       {status === "saving" ? "Saving..." : "Save layout"}
     </button>
     {#if status === "saved"}<span class="ok">Saved</span>{/if}
