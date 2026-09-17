@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { skins } from "./lib/trayskins";
-  import TraySkin from "./lib/TraySkin.svelte";
   import TrayMap from "./lib/TrayMap.svelte";
   import Settings from "./lib/Settings.svelte";
   import DiskAssignment from "./lib/DiskAssignment.svelte";
@@ -13,10 +11,8 @@
 
   const API_BASE = "/plugins/unraid-disklocation-next/api";
 
-  let selectedId = skins[0]?.id;
-  let orientation: "horizontal" | "vertical" = "horizontal";
-
-  $: skin = skins.find((s) => s.id === selectedId) ?? skins[0];
+  type Tab = "map" | "assign" | "settings";
+  let activeTab: Tab = "map";
 
   let liveLayout: ChassisLayout = exampleLayout;
   let liveLogos: LogoConfig = exampleLogos;
@@ -24,9 +20,18 @@
   let liveAssignments: Assignments = {};
   let disks: DiskResult[] | null = null;
   let disksError = "";
-  let loaded = false;
+  // Split from disks on purpose: /layout is fast, /disks can take 20+
+  // seconds on a large real array (unraid-api gathers SMART data per disk
+  // under the hood) - the layout/settings/tray-map structure shouldn't sit
+  // blocked behind that.
+  let layoutLoaded = false;
 
-  onMount(async () => {
+  onMount(() => {
+    loadLayout();
+    loadDisks();
+  });
+
+  async function loadLayout() {
     try {
       const res = await fetch(`${API_BASE}/layout`);
       if (res.ok) {
@@ -41,7 +46,10 @@
     } catch {
       // Daemon/proxy not reachable (e.g. local dev) - fall back to the demo layout.
     }
+    layoutLoaded = true;
+  }
 
+  async function loadDisks() {
     try {
       const res = await fetch(`${API_BASE}/disks`);
       if (res.ok) {
@@ -52,12 +60,11 @@
     } catch (err) {
       disksError = err instanceof Error ? err.message : String(err);
     }
-
-    loaded = true;
-  });
+  }
 
   // Real assigned occupancy once disks have loaded; the bundled demo occupancy
-  // otherwise (unconfigured daemon, or local dev without the proxy in front).
+  // otherwise (unconfigured daemon, local dev without the proxy in front, or
+  // just still loading).
   $: liveDrives = computeDrives(liveAssignments, disks);
 
   function computeDrives(assignments: Assignments, disks: DiskResult[] | null): Record<string, BayDrive> {
@@ -111,120 +118,119 @@
 
 <main>
   <h1>Disk Location</h1>
-  <p class="status">
-    Scaffold preview - tray skin picker, not yet wired to live disk data.
-  </p>
 
-  <div class="controls">
-    <label>
-      Skin
-      <select bind:value={selectedId}>
-        {#each skins as s (s.id)}
-          <option value={s.id}>{s.name}</option>
-        {/each}
-      </select>
-    </label>
-    <label>
-      Orientation
-      <select bind:value={orientation}>
-        <option value="horizontal">Horizontal (3.5&quot;)</option>
-        <option value="vertical">Vertical (2.5&quot;)</option>
-      </select>
-    </label>
-  </div>
+  <nav class="tabs">
+    <button type="button" class:active={activeTab === "map"} on:click={() => (activeTab = "map")}>
+      Tray Map
+    </button>
+    <button type="button" class:active={activeTab === "assign"} on:click={() => (activeTab = "assign")}>
+      Disk Assignment
+    </button>
+    <button type="button" class:active={activeTab === "settings"} on:click={() => (activeTab = "settings")}>
+      Settings
+    </button>
+  </nav>
 
-  {#if skin}
-    <div class="preview" class:vertical={orientation === "vertical"}>
-      <TraySkin {skin} {orientation} status="ok" driveType="hdd" label="SN A1B2C3D4" />
-    </div>
-    <p class="description">{skin.description}</p>
-    {#if skin.unofficial}
-      <p class="disclaimer">{skin.disclaimer}</p>
-    {/if}
-  {/if}
-
-  <h2>Drive types</h2>
-  <ul class="legend">
-    {#each Object.entries(driveIconMeta) as [type, info] (type)}
-      <li><strong>{info.name}</strong> - {info.description}</li>
-    {/each}
-  </ul>
-
-  {#if loaded}
-    <h2>Tray map</h2>
-    <p class="status">
-      {liveLayout.name}
-      {#if !disks}- occupancy shown here is sample data ({disksError || "daemon not reachable"}).{/if}
-    </p>
-    <div class="map">
+  <!-- All three tab panels stay mounted once loaded - switching tabs only
+       toggles visibility, so nothing re-fetches or re-initializes on every
+       switch back to a tab you already visited. -->
+  <section class="tab-panel" class:hidden={activeTab !== "map"}>
+    {#if layoutLoaded}
+      <p class="status">
+        {liveLayout.name}
+        {#if !disks}- occupancy shown here is sample data ({disksError || "loading drives..."}).{/if}
+      </p>
       <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} ledColors={liveLedColors} />
-    </div>
 
-    <h2>Disk assignment</h2>
-    <DiskAssignment
-      layout={liveLayout}
-      {disks}
-      {disksError}
-      assignments={liveAssignments}
-      save={saveAssignments}
-    />
+      <h2>Drive types</h2>
+      <ul class="legend">
+        {#each Object.entries(driveIconMeta) as [type, info] (type)}
+          <li><strong>{info.name}</strong> - {info.description}</li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="status">Loading layout...</p>
+    {/if}
+  </section>
 
-    <h2>Layout settings</h2>
-    <Settings
-      initialLayout={liveLayout}
-      initialLogos={liveLogos}
-      initialLedColors={liveLedColors}
-      save={saveSettings}
-    />
-  {:else}
-    <p class="status">Loading layout...</p>
-  {/if}
+  <section class="tab-panel" class:hidden={activeTab !== "assign"}>
+    <DiskAssignment layout={liveLayout} {disks} {disksError} assignments={liveAssignments} save={saveAssignments} />
+  </section>
+
+  <section class="tab-panel" class:hidden={activeTab !== "settings"}>
+    {#if layoutLoaded}
+      <Settings
+        initialLayout={liveLayout}
+        initialLogos={liveLogos}
+        initialLedColors={liveLedColors}
+        save={saveSettings}
+      />
+    {:else}
+      <p class="status">Loading layout...</p>
+    {/if}
+  </section>
 </main>
 
 <style>
   main {
+    /* Self-contained panel with its own light/dark pairing rather than
+       inheriting the host page's theme - Unraid's webGUI defaults to dark,
+       and assuming a light host background made most of this unreadable
+       there (confirmed against a real install). */
+    --bg: #1b1b1d;
+    --bg-panel: #242427;
+    --fg: #e9e8e3;
+    --muted: #9b9a94;
+    --border: rgba(233, 232, 227, 0.14);
+    --accent-ok: #4a9d5f;
+    --accent-warn: #d9a72e;
+    --accent-critical: #c9463c;
+
     font-family: system-ui, -apple-system, sans-serif;
-    max-width: 640px;
-    color: #242420;
+    max-width: 720px;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 16px 20px 24px;
+    border-radius: 6px;
   }
   h1 {
     font-size: 20px;
-    margin-bottom: 4px;
+    margin: 0 0 12px;
+  }
+  h2 {
+    font-size: 15px;
+    margin: 20px 0 8px;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .tabs button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tabs button.active {
+    color: var(--fg);
+    border-bottom-color: var(--accent-ok);
+  }
+  .tab-panel.hidden {
+    display: none;
   }
   .status {
     font-size: 12px;
-    color: #78776f;
+    color: var(--muted);
     margin-top: 0;
-  }
-  .controls {
-    display: flex;
-    gap: 16px;
-    margin: 16px 0;
-    font-size: 13px;
-  }
-  .controls label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .preview {
-    width: 240px;
-    margin: 16px 0;
-  }
-  .preview.vertical {
-    width: 90px;
-  }
-  .description,
-  .disclaimer {
-    font-size: 13px;
-    color: #78776f;
-    margin: 4px 0;
   }
   .legend {
     font-size: 13px;
     padding-left: 18px;
-  }
-  .map {
-    margin: 16px 0 24px;
   }
 </style>

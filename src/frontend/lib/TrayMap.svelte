@@ -85,7 +85,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #78776f;
+    color: var(--muted);
     margin: 0 0 8px;
   }
   .grid {
@@ -110,7 +110,7 @@
   }
   .empty {
     width: 100%;
-    border: 1px dashed rgba(36, 36, 32, 0.25);
+    border: 1px dashed var(--border);
     border-radius: 3px;
     box-sizing: border-box;
     display: flex;
@@ -119,6 +119,6 @@
     font: 8px ui-monospace, "SFMono-Regular", Menlo, monospace;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: rgba(36, 36, 32, 0.35);
+    color: var(--muted);
   }
 </style>

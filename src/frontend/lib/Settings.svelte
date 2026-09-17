@@ -260,8 +260,32 @@
   .settings {
     font-size: 13px;
   }
+  .settings :global(input),
+  .settings :global(select) {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 4px 6px;
+    font: inherit;
+    font-size: 13px;
+  }
+  .settings :global(input[type="color"]) {
+    padding: 0;
+  }
+  .settings :global(button) {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
   .group-editor {
-    border: 1px solid rgba(36, 36, 32, 0.15);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 10px 12px;
     margin-bottom: 10px;
@@ -298,7 +322,7 @@
     margin-bottom: 8px;
   }
   .hint {
-    color: #78776f;
+    color: var(--muted);
     margin: 6px 0 0;
   }
   .add-group {
@@ -338,13 +362,13 @@
     align-items: center;
     gap: 5px;
     font-size: 12px;
-    color: #78776f;
+    color: var(--muted);
   }
   .led-swatch input[type="color"] {
     width: 28px;
     height: 22px;
     padding: 0;
-    border: 1px solid rgba(36, 36, 32, 0.25);
+    border: 1px solid var(--border);
     border-radius: 3px;
     background: none;
     cursor: pointer;
@@ -355,13 +379,13 @@
     gap: 10px;
     margin-top: 16px;
   }
-  .remove {
-    color: #a33;
+  .settings :global(button.remove) {
+    color: var(--accent-critical);
   }
   .ok {
-    color: #4a9d5f;
+    color: var(--accent-ok);
   }
   .err {
-    color: #c9463c;
+    color: var(--accent-critical);
   }
 </style>

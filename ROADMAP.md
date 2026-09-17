@@ -62,11 +62,33 @@ data*.
   page with a mount `<div>` and a `<script>` tag loading this project's own bundled
   frontend JS - it renders in the same document, not a nested browsing context (iframing
   Unraid's own UI is a known source of breakage, e.g. the Connect plugin's iframe issues on
-  the forums). API calls stay same-origin via an nginx `conf.d` drop-in snippet that
-  reverse-proxies a path to the local daemon - Unraid's nginx already includes
-  `/etc/nginx/conf.d/*.conf`, so this needs no separate reverse-proxy container. Skeleton:
-  [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page),
+  the forums). Skeleton: [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page),
   [plugin/nginx/unraid-disklocation-next.conf](plugin/nginx/unraid-disklocation-next.conf).
+  **Corrected against a real box (2026-09), replacing wrong assumptions this bullet used to
+  make:**
+  - The `.page` file must be installed flat at `/usr/local/emhttp/plugins/<name>/<Basename>.page`
+    - **not** in a `pages/` subdirectory (this repo's own `plugin/pages/` is just a source-tree
+    choice; a real install step needs to flatten it). Its URL is `/<TopMenu>/<Basename>`, e.g.
+    `/Tools/DiskLocationNext` - confirmed by checking a real sibling plugin's own working URL.
+    A colliding `Title` with another installed plugin (we originally reused "Disk Location")
+    is also a real, silent failure mode - menu entries need to be visibly distinct.
+  - Unraid's `nginx.conf` does **not** wildcard-include `/etc/nginx/conf.d/*.conf` - it
+    includes exactly one file, `conf.d/servers.conf`, which itself includes
+    `conf.d/locations.conf` (once per server block). A dropped-in `.conf` file elsewhere in
+    `conf.d/` is silently never read. The real, working pattern - confirmed by an existing
+    real plugin (`u-manager-companion`) already doing exactly this for its own GraphQL proxy -
+    is to persist the snippet under `/boot/config/plugins/<name>/nginx/<name>.conf` (survives
+    reboots) and get it pulled in by appending one `include /boot/config/plugins/<name>/nginx/<name>.conf;`
+    line into `/etc/nginx/conf.d/locations.conf`.
+  - `/etc/rc.d/rc.nginx reload` **regenerates** `locations.conf` (and presumably other conf.d
+    files) rather than just reloading nginx against whatever's on disk - a hand-appended
+    `include` line there gets silently wiped by it every time. `nginx -s reload` (the raw
+    nginx binary signal, bypassing Unraid's wrapper script) reloads without regenerating.
+    This means a real install script can't just append the include line once at install time
+    and call it done - either it needs to re-assert that line before every `rc.nginx reload`
+    (e.g. from the daemon's own rc.d `start()`), or there's some other Unraid-native
+    registration point (used by `locations.conf`'s generator itself) that survives
+    regeneration, which hasn't been found yet. **Open question, not yet solved** - see below.
 - **Runtime packaging: Node.js + Single Executable Applications (SEA), not Bun.** SEA has
   been stable since Node 22 and streamlined further in Node 24 (`--build-sea`), so the
   `.plg` ships a compiled binary with no separate Node.js install required on the box
@@ -248,6 +270,11 @@ data*.
 
 ## Open questions (not yet decided)
 
+- **How the nginx `locations.conf` include survives `rc.nginx reload`'s regeneration.** See the
+  UI-delivery correction above - a real `.plg` install can't just append the include line once,
+  since a later reload wipes it. Need to find whatever Unraid-native mechanism the generator
+  itself reads (so a plugin's registration survives regeneration the way `u-manager-companion`'s
+  does), or fall back to re-asserting the line from the daemon's own rc.d `start()` every time.
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
 

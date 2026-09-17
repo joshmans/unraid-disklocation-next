@@ -166,14 +166,14 @@
     margin: 12px 0 4px;
   }
   .hint {
-    color: #78776f;
+    color: var(--muted);
   }
   .drive-row {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 6px 0;
-    border-bottom: 1px solid rgba(36, 36, 32, 0.1);
+    border-bottom: 1px solid var(--border);
   }
   .drive-info {
     display: flex;
@@ -185,11 +185,23 @@
   .mono {
     font: 12px ui-monospace, "SFMono-Regular", Menlo, monospace;
   }
-  button.active {
-    background: #d9a72e;
-    border-color: #b3881f;
+  .assignment :global(button),
+  .assignment :global(select) {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .assignment :global(button.active) {
+    background: var(--accent-warn);
+    color: #1b1b1d;
+    border-color: var(--accent-warn);
   }
   .err {
-    color: #c9463c;
+    color: var(--accent-critical);
   }
 </style>
