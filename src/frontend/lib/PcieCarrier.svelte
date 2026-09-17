@@ -34,7 +34,8 @@
   {#each rows as row, i (i)}
     <div
       class="module"
-      style="left:{pct(workArea.x, vb.w)};top:{pct(row.top, vb.h)};width:{pct(workArea.w, vb.w)};height:{pct(rowH, vb.h)}"
+      class:fault={row.drive?.status === "critical"}
+      style="left:{pct(workArea.x, vb.w)};top:{pct(row.top, vb.h)};width:{pct(workArea.w, vb.w)};height:{pct(rowH, vb.h)};--fault-color:{row.drive ? statusColor(row.drive.status) : 'transparent'}"
     >
       {#if row.drive}
         <div class="notch"></div>
@@ -72,6 +73,25 @@
     align-items: center;
     gap: 3%;
     box-sizing: border-box;
+    border-radius: 2px;
+  }
+  .module.fault {
+    animation: module-fault-flash 1s ease-in-out infinite;
+  }
+  @keyframes module-fault-flash {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    50% {
+      box-shadow: 0 0 0 2px var(--fault-color);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .module.fault {
+      animation: none;
+      box-shadow: 0 0 0 2px var(--fault-color);
+    }
   }
   .notch {
     flex: 0 0 4%;

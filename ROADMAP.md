@@ -234,6 +234,17 @@ data*.
   override through the color picker and watched the tray's LED update immediately, reloaded the
   page and confirmed the override survived, then hit Reset and confirmed it reverted to the
   skin's own default color on the real rendered tray.
+- **Whole-tile flash on a SMART fault, not just the LED dot.** A single small LED is easy to
+  miss in a 24+ bay grid. `TraySkin.svelte`/`PcieCarrier.svelte` now add a pulsing red ring
+  around the whole tray/module when `status === "critical"`, colored from that skin's own
+  (possibly user-overridden) critical LED color via a `--fault-color` CSS variable, so the two
+  features stay consistent rather than introducing a second color knob. Disabled in favor of a
+  static ring under `prefers-reduced-motion: reduce`. Note this is currently reachable only from
+  the bundled demo data or a future SMART-history feature - unraid-api's `disks.smartStatus` is
+  OK/UNKNOWN only (see the schema findings above), so nothing in `derive-drive.ts` produces
+  `"critical"` from live data yet; that's still gated on the not-yet-built SMART-history
+  polling (its own `smartctl` calls, per the SMART history storage note above) actually
+  detecting a fault.
 
 ## Open questions (not yet decided)
 

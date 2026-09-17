@@ -24,7 +24,11 @@
   }
 </script>
 
-<div class="tray-skin" style="aspect-ratio:{vb.w}/{vb.h}">
+<div
+  class="tray-skin"
+  class:fault={status === "critical"}
+  style="aspect-ratio:{vb.w}/{vb.h}; --fault-color:{resolvedLedColor}"
+>
   <div class="base">{@html svgMarkup}</div>
 
   <div
@@ -61,6 +65,25 @@
     position: relative;
     width: 100%;
     color: #242420;
+    border-radius: 3px;
+  }
+  .tray-skin.fault {
+    animation: tray-fault-flash 1s ease-in-out infinite;
+  }
+  @keyframes tray-fault-flash {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    50% {
+      box-shadow: 0 0 0 3px var(--fault-color);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tray-skin.fault {
+      animation: none;
+      box-shadow: 0 0 0 3px var(--fault-color);
+    }
   }
   .base {
     position: absolute;
