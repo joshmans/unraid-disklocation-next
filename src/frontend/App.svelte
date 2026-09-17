@@ -117,8 +117,6 @@
 </script>
 
 <main>
-  <h1>Disk Location</h1>
-
   <nav class="tabs">
     <button type="button" class:active={activeTab === "map"} on:click={() => (activeTab = "map")}>
       Tray Map
@@ -192,10 +190,6 @@
     color: var(--fg);
     padding: 16px 20px 24px;
     border-radius: 6px;
-  }
-  h1 {
-    font-size: 20px;
-    margin: 0 0 12px;
   }
   h2 {
     font-size: 15px;
