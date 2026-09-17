@@ -39,8 +39,8 @@
 # NOT YET FUNCTIONAL
 #
 # Still open before this can install anything real:
-#  - Runtime packaging: self-contained compiled binary vs. requiring a
-#    separately-installed Node.js runtime (affects what gets downloaded here)
+#  - The Node.js SEA build step itself isn't wired up yet (turning src/ into
+#    the standalone binary this file would download and install)
 #  - Where release artifacts get published/versioned
 #
 # See ROADMAP.md. This file exists to establish the expected shape (entities,

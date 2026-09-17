@@ -6,13 +6,14 @@
 # Started/stopped via an array-start/array-stop event hook, same as other
 # plugin daemons (see e.g. the netbird-unraid plugin for precedent).
 #
-# TODO: EXEC currently assumes a system Node.js runtime. Still deciding
-# between that (extra install dependency, e.g. NerdPack) and shipping a
-# self-contained compiled binary (Bun --compile / Node SEA / pkg) so the
-# plugin has no external runtime dependency - see ROADMAP.md.
+# Runtime: Node.js + Single Executable Applications (SEA) - see ROADMAP.md.
+# EXEC below still points at a plain `node index.js` invocation as a
+# placeholder; the SEA build step (turning src/ into a standalone binary with
+# no system Node.js dependency) isn't wired up yet, so this line will change
+# to exec that compiled binary directly once it is.
 
 PIDFILE="/var/run/unraid-disklocation-next.pid"
-EXEC="/usr/bin/node /usr/local/emhttp/plugins/unraid-disklocation-next/app/src/index.js"
+EXEC="/usr/local/emhttp/plugins/unraid-disklocation-next/app/unraid-disklocation-next"
 LOGFILE="/var/log/unraid-disklocation-next.log"
 
 start() {

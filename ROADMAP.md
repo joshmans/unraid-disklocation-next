@@ -67,20 +67,23 @@ data*.
   `/etc/nginx/conf.d/*.conf`, so this needs no separate reverse-proxy container. Skeleton:
   [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page),
   [plugin/nginx/unraid-disklocation-next.conf](plugin/nginx/unraid-disklocation-next.conf).
-
-## Open questions (not yet decided)
-
-- **Runtime packaging.** Unraid doesn't ship Node.js by default (users typically add it via
-  a separate NerdPack-style plugin), so a `.plg` that just execs `node index.js` adds an
-  external dependency and a more fragile install. The better option is likely a
-  self-contained compiled binary (Bun's `--compile`, Node's Single Executable Application
-  support, or `pkg`) so the plugin has no separate runtime prerequisite - not yet decided
-  which, and not yet built either way. The current `rc.d` skeleton assumes a system Node
-  as a placeholder and is marked accordingly.
+- **Runtime packaging: Node.js + Single Executable Applications (SEA), not Bun.** SEA has
+  been stable since Node 22 and streamlined further in Node 24 (`--build-sea`), so the
+  `.plg` ships a compiled binary with no separate Node.js install required on the box
+  (Unraid doesn't bundle Node.js itself). Chosen over Bun's `--compile` because it keeps the
+  project on the actual Node.js runtime's long-term stability guarantees, which matters more
+  than Bun's currently-smoother build ergonomics for something meant to run unattended for
+  years. SQLite storage will use the built-in `node:sqlite` (Release Candidate, API-stable)
+  rather than `better-sqlite3` specifically so there's no native `.node` addon that SEA can't
+  embed in the blob - `node:sqlite` ships inside Node itself, so this isn't an issue.
+  Note this doesn't help multiple independent Node-based plugins share a runtime: each
+  compiled binary is its own OS process with its own heap regardless of packaging method -
+  Node has no mechanism for one process to attach to another's running runtime, so this
+  isn't something to design around.
 - **SMART history storage.** The PHP version's purpose-built SQLite time series (temp,
   power-on hours, sector counts, wear level, overall status; configurable retention) is a
-  good design and the plan is to carry the *idea* forward, but the implementation will be
-  new (e.g. `better-sqlite3` or similar) — not yet built.
+  good design and the plan is to carry the *idea* forward using `node:sqlite` (see runtime
+  packaging above) — not yet built.
 - **How much of the tray-map UI carries over conceptually vs. needs rebuilding.** The
   tray/bay visual metaphor is the whole point of this plugin and should carry over; the
   actual rendering will be rebuilt from scratch (frontend framework/bundler not yet chosen),
