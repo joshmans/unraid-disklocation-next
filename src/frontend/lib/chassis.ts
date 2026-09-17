@@ -1,50 +1,22 @@
-// Chassis layout: the physical arrangement of drive bays a chassis has -
-// which groups of bays it has (e.g. a front 3.5" hot-swap cage and a rear
-// 2.5" cage are two separate physical groups, not one grid), and per-bay
-// which tray skin and orientation to render. unraid-api has no concept of
-// physical bay position (see ROADMAP.md's GraphQL-schema findings), so this
-// mapping is entirely this plugin's own stored config. A settings UI to
-// build one of these interactively is still an open item (ROADMAP.md); this
-// module is the data shape that UI will read/write, with an example layout
-// standing in for it until then.
+// Frontend-side chassis helpers. The types themselves live in
+// src/shared/chassis-types.ts so the backend (which persists this as the
+// plugin's own config, per ROADMAP.md) and the frontend agree on the shape.
+export type {
+  Orientation,
+  DriveType,
+  DriveStatus,
+  BayDrive,
+  BayConfig,
+  BayGroup,
+  PcieCardConfig,
+  PcieGroup,
+  Group,
+  ChassisLayout,
+  LogoConfig,
+  StoredLayout,
+} from "../../shared/chassis-types.js";
 
-export type Orientation = "horizontal" | "vertical";
-export type DriveType = "hdd" | "ssd" | "nvme";
-export type DriveStatus = "ok" | "warn" | "critical";
-
-export interface BayConfig {
-  /** Stable identifier, unique across the whole layout (not just its group) - used to key live drive data onto a bay. */
-  id: string;
-  /** Row/column position within this bay's own group, both 0-based. */
-  row: number;
-  col: number;
-  /** Which assets/tray-skins/<skinId> to render this bay with. */
-  skinId: string;
-  orientation: Orientation;
-}
-
-export interface BayGroup {
-  id: string;
-  /** Shown as a heading above the group, e.g. "Front (3.5" hot-swap)". */
-  label: string;
-  rows: number;
-  columns: number;
-  bays: BayConfig[];
-}
-
-export interface ChassisLayout {
-  id: string;
-  name: string;
-  groups: BayGroup[];
-}
-
-/** What TrayMap renders onto an occupied bay; a bay with no entry here renders as empty. */
-export interface BayDrive {
-  driveType: DriveType;
-  status: DriveStatus;
-  label: string;
-  logoUrl?: string | null;
-}
+import type { BayConfig, BayDrive, ChassisLayout } from "../../shared/chassis-types.js";
 
 function frontBays(): BayConfig[] {
   const bays: BayConfig[] = [];
@@ -65,21 +37,27 @@ function rearBays(): BayConfig[] {
 }
 
 /**
- * Stands in for a settings-UI-authored layout: a 24-bay 4U front chassis
- * (4 rows x 6 columns, SuperMicro-skinned 3.5" bays) plus a 4-bay 2.5" rear
- * cage (HP-skinned, vertical) - proves TrayMap can render more than one
- * bay group, with different skins and orientations, in a single layout.
+ * Demo layout shown until the user saves their own via the settings UI:
+ * a 24-bay 4U front chassis (SuperMicro-skinned 3.5" bays), a 4-bay 2.5"
+ * rear cage (HP-skinned, vertical), and a rear x16 NVMe carrier - proves
+ * TrayMap can render bay groups and PCIe-carrier groups side by side.
  */
 export const exampleLayout: ChassisLayout = {
   id: "example-4u-24bay",
-  name: 'Example: 24-bay 4U + rear 2.5" cage',
+  name: 'Example: 24-bay 4U + rear 2.5" cage + PCIe carrier',
   groups: [
-    { id: "front", label: 'Front (3.5" hot-swap)', rows: 4, columns: 6, bays: frontBays() },
-    { id: "rear", label: 'Rear (2.5" cage)', rows: 1, columns: 4, bays: rearBays() },
+    { kind: "bays", id: "front", label: 'Front (3.5" hot-swap)', rows: 4, columns: 6, bays: frontBays() },
+    { kind: "bays", id: "rear", label: 'Rear (2.5" cage)', rows: 1, columns: 4, bays: rearBays() },
+    {
+      kind: "pcie",
+      id: "pcie",
+      label: "Add-in cards",
+      cards: [{ id: "slot3", carrierId: "default", label: "Slot 3 - x16 NVMe carrier", moduleCount: 4 }],
+    },
   ],
 };
 
-/** Sample occupancy for the example layout - stands in for live disk data merged onto bays by their assigned id. */
+/** Sample occupancy for the example layout - stands in for live disk data merged onto bays/modules by their assigned id. */
 export const exampleDrives: Record<string, BayDrive> = {
   "front-0-0": { driveType: "hdd", status: "ok", label: "SN Z1E0A2B4" },
   "front-0-1": { driveType: "hdd", status: "ok", label: "SN Z1E0A2B5" },
@@ -96,4 +74,10 @@ export const exampleDrives: Record<string, BayDrive> = {
   "front-3-1": { driveType: "ssd", status: "ok", label: "SN CACHE-02" },
   "rear-0": { driveType: "ssd", status: "ok", label: "SN R-SSD01" },
   "rear-1": { driveType: "nvme", status: "ok", label: "SN R-NVM02" },
+  "slot3-m0": { driveType: "nvme", status: "ok", label: "SN NVME-A1" },
+  "slot3-m1": { driveType: "nvme", status: "ok", label: "SN NVME-A2" },
+  "slot3-m2": { driveType: "nvme", status: "warn", label: "SN NVME-A3" },
 };
+
+/** Manufacturer logo URL per tray-skin id, applied to every bay using that skin. Empty until the settings UI is used. */
+export const exampleLogos: Record<string, string> = {};

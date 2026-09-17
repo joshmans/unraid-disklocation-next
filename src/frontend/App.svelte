@@ -1,14 +1,42 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { skins } from "./lib/trayskins";
   import TraySkin from "./lib/TraySkin.svelte";
   import TrayMap from "./lib/TrayMap.svelte";
+  import Settings from "./lib/Settings.svelte";
   import { driveIconMeta } from "./lib/driveicons";
-  import { exampleLayout, exampleDrives } from "./lib/chassis";
+  import { exampleLayout, exampleDrives, exampleLogos } from "./lib/chassis";
+  import type { ChassisLayout, LogoConfig } from "./lib/chassis";
 
   let selectedId = skins[0]?.id;
   let orientation: "horizontal" | "vertical" = "horizontal";
 
   $: skin = skins.find((s) => s.id === selectedId) ?? skins[0];
+
+  let liveLayout: ChassisLayout = exampleLayout;
+  let liveLogos: LogoConfig = exampleLogos;
+  let loaded = false;
+
+  onMount(async () => {
+    try {
+      const res = await fetch("/plugins/unraid-disklocation-next/api/layout");
+      if (res.ok) {
+        const stored = await res.json();
+        if (stored) {
+          liveLayout = stored.layout;
+          liveLogos = stored.logos;
+        }
+      }
+    } catch {
+      // Daemon/proxy not reachable (e.g. local dev) - fall back to the demo layout.
+    }
+    loaded = true;
+  });
+
+  function onSettingsSave(e: CustomEvent<{ layout: ChassisLayout; logos: LogoConfig }>) {
+    liveLayout = e.detail.layout;
+    liveLogos = e.detail.logos;
+  }
 </script>
 
 <main>
@@ -52,13 +80,21 @@
     {/each}
   </ul>
 
-  <h2>Tray map</h2>
-  <p class="status">
-    {exampleLayout.name} - sample layout/occupancy, not yet wired to a settings UI or live disk data.
-  </p>
-  <div class="map">
-    <TrayMap layout={exampleLayout} drives={exampleDrives} />
-  </div>
+  {#if loaded}
+    <h2>Tray map</h2>
+    <p class="status">
+      {liveLayout.name} - occupancy shown here is sample data; live disk-to-bay assignment isn't
+      wired up yet, so a saved layout of your own will render with every bay empty until then.
+    </p>
+    <div class="map">
+      <TrayMap layout={liveLayout} drives={exampleDrives} logos={liveLogos} />
+    </div>
+
+    <h2>Layout settings</h2>
+    <Settings initialLayout={liveLayout} initialLogos={liveLogos} on:save={onSettingsSave} />
+  {:else}
+    <p class="status">Loading layout...</p>
+  {/if}
 </main>
 
 <style>

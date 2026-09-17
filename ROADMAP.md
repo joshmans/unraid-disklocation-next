@@ -142,28 +142,53 @@ data*.
 - **Drive-type icons**: real distinct silhouettes, not three variations on a rounded
   rectangle - HDD is a platter+arm circle, SSD is a flat rectangular drive body, NVMe is a
   notched gumstick (the actual M.2 module shape). [assets/drive-icons/](assets/drive-icons/).
-- **Tray-map grid: a chassis is a list of bay groups, not one flat grid.** A real chassis is
-  physically segmented (e.g. a front 3.5" hot-swap cage and a separate rear 2.5" cage aren't
-  one continuous grid), so [chassis.ts](src/frontend/lib/chassis.ts) models a `ChassisLayout`
-  as a list of `BayGroup`s, each its own `rows`/`columns` grid of `BayConfig` entries (skin id
-  + orientation per bay, mix-and-match freely). [TrayMap.svelte](src/frontend/lib/TrayMap.svelte)
-  renders each group as its own labeled CSS grid of `TraySkin` instances, keyed by a stable
-  bay id that live drive data (once wired up) merges onto by that id; an unoccupied id renders
-  as an empty-bay placeholder rather than nothing. Verified end-to-end in a real browser
+- **Tray-map grid: a chassis is a list of groups, not one flat grid.** A real chassis is
+  physically segmented (e.g. a front 3.5" hot-swap cage, a separate rear 2.5" cage, and an
+  add-in PCIe carrier aren't one continuous grid), so
+  [chassis-types.ts](src/shared/chassis-types.ts) models a `ChassisLayout` as a list of
+  `Group`s - either a `BayGroup` (its own `rows`/`columns` grid of `BayConfig` entries, skin
+  id + orientation per bay) or a `PcieGroup` (a list of carrier cards, each with a module
+  count and shell id). [TrayMap.svelte](src/frontend/lib/TrayMap.svelte) renders each group as
+  its own labeled section - a CSS grid of `TraySkin` instances for a `BayGroup`, a row of
+  `PcieCarrier` instances for a `PcieGroup` - keyed by a stable id (`bay.id`, or
+  `` `${card.id}-m${index}` `` per module) that live drive data merges onto; an unoccupied id
+  renders as an empty placeholder rather than nothing. Verified end-to-end in a real browser
   against a mixed-orientation, multi-skin, multi-group example layout (24 SuperMicro-skinned
-  horizontal bays + 4 HP-skinned vertical bays) - confirmed programmatically, not just
-  visually, that per-bay status color and drive-type icon color compute correctly (amber/red/
-  green LEDs, blue/green/purple icons) for the right bays.
+  horizontal bays + 4 HP-skinned vertical bays + a 4-module PCIe carrier) - confirmed
+  programmatically, not just visually, that per-bay/per-module status and drive-type colors
+  compute correctly for the right slots.
+- **PCIe NVMe carrier as a live component.** [assets/pcie-carrier/default.svg](assets/pcie-carrier/default.svg)
+  stays a static shell (frame, heatsink, edge connector only, per
+  [assets/pcie-carrier/README.md](assets/pcie-carrier/README.md)); the per-module rows (status
+  LED, drive-type icon, serial label - as many as the card's configured module count) are
+  overlaid at render time by [PcieCarrier.svelte](src/frontend/lib/PcieCarrier.svelte), the
+  same pattern `TraySkin.svelte` uses. Carrier shells are directory-discovered the same way
+  tray skins are (`assets/pcie-carrier/*.svg`), just without per-skin metadata yet since there's
+  only the one unbranded shell so far.
+- **Settings UI for layout + logos, persisted through a real (if minimal) backend route.**
+  [Settings.svelte](src/frontend/lib/Settings.svelte) edits groups/bays/cards and a
+  per-tray-skin manufacturer-logo URL, and saves them via `POST /layout` (see
+  [src/layout.ts](src/layout.ts) and the two routes added to
+  [src/server.ts](src/server.ts)) to the same `/boot/config/plugins/...` convention
+  `config.ts` already uses. `App.svelte` loads any saved layout on mount and falls back to the
+  bundled example layout when none exists yet. Deliberately simple: a group's skin/orientation
+  is set once for the whole group rather than per-bay (real chassis are usually uniform per
+  physical cage), and there's no drag-and-drop grid editor - just rows/columns counts. Verified
+  against the real daemon process (not a mock): saved an edited layout through the actual
+  `POST /layout` handler, reloaded the page, and confirmed both the settings form and the tray
+  map picked the saved config back up, including a configured logo URL actually rendering on
+  the tray it was assigned to.
 
 ## Open questions (not yet decided)
 
-- **PCIe NVMe carrier as a live component.** [assets/pcie-carrier/default.svg](assets/pcie-carrier/default.svg)
-  is a static shell (frame, heatsink, edge connector); the per-module rows (icon, serial,
-  count driven by the x8/x16/bay-count config) still need a Svelte component, analogous to
-  `TraySkin.svelte`, rather than being baked into the SVG.
-- **Where the manufacturer-logo URL and per-bay skin/orientation choice get configured** -
-  a settings UI (likely a form on this same page) that writes to this plugin's own config
-  store, feeding the `logoUrl` prop `TraySkin.svelte` already accepts.
+- **Live disk-to-bay assignment.** The settings UI above configures which *skin/orientation* a
+  bay or PCIe module uses, not which *physical disk* currently occupies it - `TrayMap`/
+  `PcieCarrier` already accept a `drives` map keyed by bay/module id, but nothing populates
+  that map from the real `disks`/`array` GraphQL queries yet (see the schema findings above -
+  unraid-api has no bay concept, so this mapping has to be either inferred from something
+  stable per bay, like drive serial number pinned to a bay id by the user, or exposed as a
+  step in the settings UI itself). Until this exists, a saved custom layout always renders
+  with every bay/module empty.
 
 ## Conventions carried forward
 

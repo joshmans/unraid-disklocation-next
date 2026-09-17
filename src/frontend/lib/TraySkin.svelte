@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Skin } from "./trayskins";
   import { driveIconColors, driveIconSvg } from "./driveicons";
+  import { statusColor } from "./status";
 
   export let skin: Skin;
   export let orientation: "horizontal" | "vertical" = "horizontal";
@@ -12,7 +13,7 @@
   $: vb = orientation === "horizontal" ? { w: 220, h: 64 } : { w: 76, h: 190 };
   $: svgMarkup = orientation === "horizontal" ? skin.svg.horizontal : skin.svg.vertical;
   $: o = skin.overlays[orientation];
-  $: ledColor = status === "ok" ? "#4a9d5f" : status === "warn" ? "#d9a72e" : "#c9463c";
+  $: ledColor = statusColor(status);
   $: iconColor = driveIconColors[driveType] ?? "#666";
   $: iconSvg = driveIconSvg[driveType] ?? "";
 
