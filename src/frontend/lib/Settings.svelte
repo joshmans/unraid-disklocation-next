@@ -255,7 +255,7 @@
 
   <div class="save-row">
     <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
-      {status === "saving" ? "Saving..." : "Save"}
+      {status === "saving" ? "Saving..." : "Save Layout"}
     </button>
     {#if status === "saved"}<span class="ok">Saved</span>{/if}
     {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
@@ -278,7 +278,7 @@
     {/each}
     <div class="save-row">
       <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
-        {status === "saving" ? "Saving..." : "Save"}
+        {status === "saving" ? "Saving..." : "Save Logos"}
       </button>
       {#if status === "saved"}<span class="ok">Saved</span>{/if}
       {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
@@ -316,7 +316,7 @@
     {/each}
     <div class="save-row">
       <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
-        {status === "saving" ? "Saving..." : "Save"}
+        {status === "saving" ? "Saving..." : "Save Colors"}
       </button>
       {#if status === "saved"}<span class="ok">Saved</span>{/if}
       {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
@@ -344,7 +344,7 @@
         <input type="number" min="1" max="65535" bind:value={portDraft} disabled={daemonStatus.running} />
       </label>
       <button type="button" on:click={onSavePortClick} disabled={daemonStatus.running || daemonActionInFlight}>
-        Save port
+        Save Port
       </button>
       <p class="hint">
         Only changeable while the daemon isn't running, so a Docker container or another
@@ -369,7 +369,7 @@
     </p>
     <div class="save-row">
       <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
-        {status === "saving" ? "Saving..." : "Save"}
+        {status === "saving" ? "Saving..." : "Save Storage"}
       </button>
       {#if status === "saved"}<span class="ok">Saved</span>{/if}
       {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
@@ -378,7 +378,7 @@
 
   <div class="save-row">
     <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
-      {status === "saving" ? "Saving..." : "Save"}
+      {status === "saving" ? "Saving..." : "Save Everything"}
     </button>
     {#if status === "saved"}<span class="ok">Saved</span>{/if}
     {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
