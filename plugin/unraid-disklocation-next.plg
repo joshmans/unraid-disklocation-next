@@ -3,11 +3,11 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.18">
+<!ENTITY version    "2026.09.18-2">
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "054a616f0ef8b4f6a71cfd46e696b6535fcf9c4315ec93e63fef91536c7f40d0">
+<!ENTITY sha256     "33e7977f302a530231b14bfafb9e98e8969fe158910995a7182dc8b4ba7e51ab">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,9 @@
 -->
 
 <CHANGES>
+###2026.09.18-2
+ - Merge duplicate CHANGES header in the .plg
+
 ###2026.09.18
  - First real installable release. Standalone Node SEA binary daemon, tray/
    bay drive map with a directory-discovered tray-skin + PCIe-carrier gallery,
