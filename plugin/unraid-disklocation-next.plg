@@ -43,6 +43,11 @@
 
 <CHANGES>
 ###2026.09.18
+ - First real installable release. Standalone Node SEA binary daemon, tray/
+   bay drive map with a directory-discovered tray-skin + PCIe-carrier gallery,
+   role/pool/size display, brand-logo system (hotlinked or locally-uploaded
+   SVG), classic-plugin import, SMART history charts, and daemon start/stop/
+   port control from the Settings tab. See ROADMAP.md for the full history.
  - Add PCIe conversion, role/pool/size display, brand logos, and a real .plg/SEA install pipeline
  - Add importer for tray assignments from the classic Disk Location plugin
  - Rename Storage section's save button to Save Location
@@ -77,13 +82,6 @@
  - Settle runtime packaging: Node.js + SEA, node:sqlite for storage
  - Scaffold .plg daemon distribution: rc.d, nginx conf.d proxy, page, server
  - Rename package to unraid-disklocation-next
-
-###2026.09.18
- - First real installable release. Standalone Node SEA binary daemon, tray/
-   bay drive map with a directory-discovered tray-skin + PCIe-carrier gallery,
-   role/pool/size display, brand-logo system (hotlinked or locally-uploaded
-   SVG), classic-plugin import, SMART history charts, and daemon start/stop/
-   port control from the Settings tab. See ROADMAP.md for the full history.
 </CHANGES>
 
 <!-- Unraid's plugin engine downloads &packageURL;, verifies it against
