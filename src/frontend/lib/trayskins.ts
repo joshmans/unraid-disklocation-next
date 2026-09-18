@@ -59,13 +59,29 @@ function dirOf(path: string): string {
   return path.slice(0, path.lastIndexOf("/"));
 }
 
-export const skins: Skin[] = Object.entries(metaModules).map(([path, meta]) => {
-  const dir = dirOf(path);
-  return {
-    ...meta,
-    svg: {
-      horizontal: horizontalModules[`${dir}/horizontal.svg`] ?? "",
-      vertical: verticalModules[`${dir}/vertical.svg`] ?? "",
-    },
-  };
-});
+// import.meta.glob returns entries in directory-listing order (effectively
+// alphabetical), which put "dell" ahead of the unbranded "generic" skin -
+// deliberately reordered so the unbranded default sits right after the
+// original classic skin, ahead of every vendor-styled one. Any skin added
+// later without being listed here just sorts after these, alphabetically.
+const SKIN_ORDER = ["classic", "generic", "dell", "hp", "netapp", "supermicro"];
+
+export const skins: Skin[] = Object.entries(metaModules)
+  .map(([path, meta]) => {
+    const dir = dirOf(path);
+    return {
+      ...meta,
+      svg: {
+        horizontal: horizontalModules[`${dir}/horizontal.svg`] ?? "",
+        vertical: verticalModules[`${dir}/vertical.svg`] ?? "",
+      },
+    };
+  })
+  .sort((a, b) => {
+    const ai = SKIN_ORDER.indexOf(a.id);
+    const bi = SKIN_ORDER.indexOf(b.id);
+    if (ai === -1 && bi === -1) return a.id.localeCompare(b.id);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });

@@ -172,6 +172,8 @@
 </script>
 
 <div class="settings">
+  <section class="settings-section">
+  <h3>Chassis layout</h3>
   {#each layout.groups as group (group.id)}
     <div class="group-editor">
       <div class="group-header">
@@ -251,6 +253,15 @@
     <button type="button" on:click={() => addGroup("pcie")}>+ PCIe group</button>
   </div>
 
+  <div class="save-row">
+    <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
+      {status === "saving" ? "Saving..." : "Save"}
+    </button>
+    {#if status === "saved"}<span class="ok">Saved</span>{/if}
+    {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
+  </div>
+  </section>
+
   <section class="settings-section">
     <h3>Manufacturer logos</h3>
     <p class="hint">Hotlinked logo URL applied to every bay using that skin. Leave blank for none.</p>
@@ -265,6 +276,13 @@
         />
       </label>
     {/each}
+    <div class="save-row">
+      <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
+        {status === "saving" ? "Saving..." : "Save"}
+      </button>
+      {#if status === "saved"}<span class="ok">Saved</span>{/if}
+      {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
+    </div>
   </section>
 
   <section class="settings-section">
@@ -342,11 +360,18 @@
       people prefer to redirect it to the array or a cache pool instead. Leave blank to use
       the default. Takes effect the next time the plugin's service restarts.
     </p>
+    <div class="save-row">
+      <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
+        {status === "saving" ? "Saving..." : "Save"}
+      </button>
+      {#if status === "saved"}<span class="ok">Saved</span>{/if}
+      {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
+    </div>
   </section>
 
   <div class="save-row">
     <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
-      {status === "saving" ? "Saving..." : "Save layout"}
+      {status === "saving" ? "Saving..." : "Save"}
     </button>
     {#if status === "saved"}<span class="ok">Saved</span>{/if}
     {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
