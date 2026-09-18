@@ -19,6 +19,7 @@
   let liveLogos: LogoConfig = exampleLogos;
   let liveLedColors: LedColorConfig = exampleLedColors;
   let liveAssignments: Assignments = {};
+  let liveSmartHistoryDbPath = "";
   let disks: DiskResult[] | null = null;
   let disksError = "";
   let disksLoading = false;
@@ -37,17 +38,18 @@
   // the daemon/proxy being unreachable (local dev without it in front),
   // where falling back to the bundled demo layout is still the right call.
   let productionEmpty = false;
-  // Guards loadDisks so it only ever fires once, and only once we know
-  // there's at least one bay/PCIe group to assign drives into - avoids
-  // burning the 20+ second /disks round trip on an unconfigured install
-  // with nothing to assign yet.
+  // Guards loadDisks so it only ever fires once. Used to also require at
+  // least one bay/PCIe group to exist first (nothing to assign otherwise),
+  // but the SMART History tab needs disks/history regardless of whether a
+  // chassis has been configured at all - so this just waits for the fast
+  // /layout fetch to finish, not for any particular layout content.
   let disksRequested = false;
 
   onMount(() => {
     loadLayout();
   });
 
-  $: if (layoutLoaded && liveLayout.groups.length > 0 && !disksRequested) {
+  $: if (layoutLoaded && !disksRequested) {
     disksRequested = true;
     loadDisks();
   }
@@ -62,6 +64,7 @@
           liveLogos = stored.logos;
           liveAssignments = stored.assignments ?? {};
           liveLedColors = stored.ledColors ?? {};
+          liveSmartHistoryDbPath = stored.smartHistoryDbPath ?? "";
         } else {
           productionEmpty = true;
           liveLayout = emptyLayout;
@@ -126,12 +129,14 @@
     logos?: LogoConfig;
     ledColors?: LedColorConfig;
     assignments?: Assignments;
+    smartHistoryDbPath?: string;
   }): Promise<{ ok: boolean; error?: string }> {
     const merged = {
       layout: next.layout ?? liveLayout,
       logos: next.logos ?? liveLogos,
       ledColors: next.ledColors ?? liveLedColors,
       assignments: next.assignments ?? liveAssignments,
+      smartHistoryDbPath: next.smartHistoryDbPath ?? liveSmartHistoryDbPath,
     };
     try {
       const res = await fetch(`${API_BASE}/layout`, {
@@ -144,6 +149,7 @@
       liveLogos = merged.logos;
       liveLedColors = merged.ledColors;
       liveAssignments = merged.assignments;
+      liveSmartHistoryDbPath = merged.smartHistoryDbPath;
       // A successful save proves the daemon is reachable, so this always
       // reflects real state going forward (not just the initial classification).
       productionEmpty = merged.layout.groups.length === 0;
@@ -153,8 +159,8 @@
     }
   }
 
-  function saveSettings(layout: ChassisLayout, logos: LogoConfig, ledColors: LedColorConfig) {
-    return persistAll({ layout, logos, ledColors });
+  function saveSettings(layout: ChassisLayout, logos: LogoConfig, ledColors: LedColorConfig, smartHistoryDbPath: string) {
+    return persistAll({ layout, logos, ledColors, smartHistoryDbPath });
   }
 
   function saveAssignments(assignments: Assignments) {
@@ -170,11 +176,11 @@
     <button type="button" class:active={activeTab === "assign"} on:click={() => (activeTab = "assign")}>
       Disk Assignment
     </button>
-    <button type="button" class:active={activeTab === "settings"} on:click={() => (activeTab = "settings")}>
-      Settings
-    </button>
     <button type="button" class:active={activeTab === "history"} on:click={() => (activeTab = "history")}>
       SMART History
+    </button>
+    <button type="button" class:active={activeTab === "settings"} on:click={() => (activeTab = "settings")}>
+      Settings
     </button>
   </nav>
 
@@ -216,21 +222,22 @@
     />
   </section>
 
+  <section class="tab-panel" class:hidden={activeTab !== "history"}>
+    <SmartHistory {disks} {disksError} />
+  </section>
+
   <section class="tab-panel" class:hidden={activeTab !== "settings"}>
     {#if layoutLoaded}
       <Settings
         initialLayout={liveLayout}
         initialLogos={liveLogos}
         initialLedColors={liveLedColors}
+        initialSmartHistoryDbPath={liveSmartHistoryDbPath}
         save={saveSettings}
       />
     {:else}
       <p class="status">Loading layout...</p>
     {/if}
-  </section>
-
-  <section class="tab-panel" class:hidden={activeTab !== "history"}>
-    <SmartHistory {disks} />
   </section>
 </main>
 

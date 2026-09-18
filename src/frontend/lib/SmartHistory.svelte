@@ -8,6 +8,7 @@
   // Every disk unraid-api reports, not just tray-assigned ones - trend
   // history is useful before you've configured a chassis at all.
   export let disks: DiskResult[] | null;
+  export let disksError = "";
 
   interface Sample {
     ts: number;
@@ -47,7 +48,12 @@
 </script>
 
 <div class="smart-history">
-  {#if !disks}
+  {#if disksError}
+    <p class="err">
+      Couldn't load drives from unraid-api: {disksError}. The daemon needs an API key/URL saved
+      (see README) before drives can be listed here.
+    </p>
+  {:else if !disks}
     <p class="hint">Loading drives...</p>
   {:else if disks.length === 0}
     <p class="hint">No drives detected yet.</p>

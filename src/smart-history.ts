@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { loadSettings } from "./config.js";
+import { loadLayoutConfig } from "./layout.js";
 import { getDisks } from "./graphql/client.js";
 import { normalizeDevice } from "./locate.js";
 import type { DriveStatus } from "./shared/chassis-types.js";
@@ -15,9 +16,7 @@ import type { DriveStatus } from "./shared/chassis-types.js";
 // shell out to smartctl itself here too, on the same 700ms-interval-safe
 // execFile+argv pattern locate.ts already established (never a shell string).
 
-const DB_PATH =
-  process.env.DISKLOCATION_NEXT_SMART_DB ??
-  "/boot/config/plugins/unraid-disklocation-next/smart-history.db";
+const DEFAULT_DB_PATH = "/boot/config/plugins/unraid-disklocation-next/smart-history.db";
 const SMARTCTL_BIN = process.env.DISKLOCATION_NEXT_SMARTCTL_BIN ?? "smartctl";
 const POLL_MS = Number(process.env.DISKLOCATION_NEXT_SMART_POLL_MS ?? 30 * 60 * 1000);
 const RETENTION_DAYS = Number(process.env.DISKLOCATION_NEXT_SMART_RETENTION_DAYS ?? 180);
@@ -39,10 +38,23 @@ export interface SmartSample {
 
 let db: DatabaseSync | undefined;
 
+/**
+ * Env var always wins (dev/testing), then whatever the user set in the
+ * Settings tab, then the default under /boot. Resolved lazily on first use
+ * (not at module load) so it reflects the layout.json on disk at daemon
+ * startup - a change here takes effect on the next daemon restart, same as
+ * this plugin's other settings.
+ */
+function resolveDbPath(): string {
+  if (process.env.DISKLOCATION_NEXT_SMART_DB) return process.env.DISKLOCATION_NEXT_SMART_DB;
+  return loadLayoutConfig()?.smartHistoryDbPath || DEFAULT_DB_PATH;
+}
+
 function getDb(): DatabaseSync {
   if (db) return db;
-  mkdirSync(dirname(DB_PATH), { recursive: true });
-  db = new DatabaseSync(DB_PATH);
+  const dbPath = resolveDbPath();
+  mkdirSync(dirname(dbPath), { recursive: true });
+  db = new DatabaseSync(dbPath);
   db.exec(`
     CREATE TABLE IF NOT EXISTS smart_samples (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

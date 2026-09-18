@@ -192,7 +192,21 @@ data*.
   `scsi_grown_defect_list` correctly derived `warn` *despite reporting `isSpinning: false`*
   (proving the fix), and a simulated standby-skip response correctly recorded nothing.
   Retention was also verified by setting it to 0 days and confirming rows were pruned on
-  the next poll.
+  the next poll. On first real deployment this also immediately surfaced a genuine finding
+  on the live 43-disk array: two NVMe drives at `percentageUsed: 100` (wear-leveling
+  maxed out) correctly derived `warn`, with every other drive `ok` - the feature's first
+  real output, not a synthetic test result.
+
+  Storage location is user-configurable: `StoredLayout.smartHistoryDbPath` (a new
+  Settings-tab "Storage" field, empty = default) lets someone redirect the database off
+  the flash boot drive - this is the one file this plugin writes to on a frequent
+  schedule rather than only when a user saves a change, and `/boot` is often a
+  write-cycle-limited USB flash device. `smart-history.ts`'s `getDb()` resolves the path
+  lazily on first use (env var override, for local dev/testing, still wins over the
+  persisted setting), so a change here takes effect on the daemon's next restart, the
+  same way this plugin's other settings work. Verified by setting a custom path via
+  `layout.json` and confirming a real daemon process created and used the SQLite file
+  there instead of the default location.
 - **Frontend framework: Svelte, built with Vite.** Chosen for a widget mounted directly
   into someone else's page (no iframe, per the UI-delivery decision above): Svelte compiles
   away to plain JS with no runtime framework object to load, and its scoped-by-default CSS

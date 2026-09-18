@@ -81,4 +81,13 @@ export interface StoredLayout {
   assignments?: Assignments;
   /** Optional for backward compatibility with layout.json files saved before LED color overrides existed. */
   ledColors?: LedColorConfig;
+  /**
+   * Full file path for the SMART-history SQLite database (see smart-history.ts).
+   * Empty/absent means the default under /boot/config/plugins/... - some users
+   * prefer to redirect this elsewhere since it's the one file this plugin
+   * writes to frequently (every poll cycle), unlike this document itself
+   * which only changes when a user explicitly saves something, and /boot is
+   * often a flash drive with real write-cycle limits.
+   */
+  smartHistoryDbPath?: string;
 }

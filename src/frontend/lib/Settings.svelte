@@ -12,11 +12,15 @@
   export let initialLayout: ChassisLayout;
   export let initialLogos: LogoConfig;
   export let initialLedColors: LedColorConfig;
+  export let initialSmartHistoryDbPath = "";
   export let save: (
     layout: ChassisLayout,
     logos: LogoConfig,
     ledColors: LedColorConfig,
+    smartHistoryDbPath: string,
   ) => Promise<{ ok: boolean; error?: string }>;
+
+  const DEFAULT_SMART_DB_PATH = "/boot/config/plugins/unraid-disklocation-next/smart-history.db";
 
   function clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value));
@@ -25,6 +29,7 @@
   let layout: ChassisLayout = clone(initialLayout);
   let logos: LogoConfig = { ...initialLogos };
   let ledColors: LedColorConfig = clone(initialLedColors);
+  let smartHistoryDbPath = initialSmartHistoryDbPath;
   let status: "idle" | "saving" | "saved" | "error" = "idle";
   let errorMessage = "";
 
@@ -116,7 +121,7 @@
   async function onSaveClick() {
     status = "saving";
     errorMessage = "";
-    const result = await save(clone(layout), { ...logos }, clone(ledColors));
+    const result = await save(clone(layout), { ...logos }, clone(ledColors), smartHistoryDbPath.trim());
     if (result.ok) {
       status = "saved";
       setTimeout(() => {
@@ -252,6 +257,18 @@
     </div>
   {/each}
 
+  <h3>Storage</h3>
+  <label class="db-path-row">
+    SMART history database path
+    <input type="text" bind:value={smartHistoryDbPath} placeholder={DEFAULT_SMART_DB_PATH} />
+  </label>
+  <p class="hint">
+    This is the one file this plugin writes to often (every SMART poll cycle) rather than
+    only when you save a change here, and the default lives on the flash boot drive - some
+    people prefer to redirect it to the array or a cache pool instead. Leave blank to use
+    the default. Takes effect the next time the plugin's service restarts.
+  </p>
+
   <div class="save-row">
     <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
       {status === "saving" ? "Saving..." : "Save layout"}
@@ -338,6 +355,13 @@
   h3 {
     font-size: 13px;
     margin: 0 0 4px;
+  }
+  .db-path-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 4px 0 0;
+    max-width: 480px;
   }
   .logo-row {
     display: flex;
