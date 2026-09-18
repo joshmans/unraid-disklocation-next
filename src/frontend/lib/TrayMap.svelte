@@ -1,9 +1,11 @@
 <script lang="ts">
-  import type { ChassisLayout, BayDrive, LogoConfig, LedColorConfig } from "./chassis";
+  import type { ChassisLayout, BayDrive, LogoConfig, LedColorConfig, BrandLogoConfig, ManufacturerOverrides } from "./chassis";
+  import { DEFAULT_PCIE_CARD_WIDTH_PX } from "./chassis";
   import { skins } from "./trayskins";
   import TraySkin from "./TraySkin.svelte";
   import PcieCarrier from "./PcieCarrier.svelte";
   import { resolveLedColor } from "./status";
+  import { detectBrand } from "./brand";
 
   export let layout: ChassisLayout;
   /** Keyed by BayConfig.id (bays) or `${cardId}-m${index}` (PCIe modules); no entry = empty. */
@@ -12,6 +14,10 @@
   export let logos: LogoConfig = {};
   /** Status-LED color overrides per tray-skin id; no entry = that skin's own meta.json default. */
   export let ledColors: LedColorConfig = {};
+  export let showRoleColor = false;
+  export let showRoleIcon = false;
+  export let brandLogos: BrandLogoConfig = {};
+  export let manufacturerOverrides: ManufacturerOverrides = {};
 
   $: skinById = new Map(skins.map((s) => [s.id, s]));
 </script>
@@ -23,16 +29,18 @@
       {#if group.kind === "bays"}
         <div
           class="grid"
-          style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr)); grid-template-rows: repeat({group.rows}, auto);"
+          style="grid-template-columns: repeat({group.columns}, minmax(0, 1fr)); grid-template-rows: repeat({group.rows}, auto); {group.widthPx ? `width:${group.widthPx}px;` : ''}"
         >
-          {#each group.bays as bay (bay.id)}
+          {#each group.bays as bay, i (bay.id)}
             {@const skin = skinById.get(bay.skinId) ?? skins[0]}
             {@const drive = drives[bay.id]}
+            {@const brandId = drive ? manufacturerOverrides[bay.id] ?? detectBrand(drive.vendor, drive.model) : undefined}
+            {@const brandLogoUrl = brandId ? brandLogos[brandId] : undefined}
             <div
               class="bay"
               class:vertical={bay.orientation === "vertical"}
               style="grid-row:{bay.row + 1};grid-column:{bay.col + 1};"
-              title={bay.id}
+              title="{group.label} - Bay {i + 1}"
             >
               {#if drive && skin}
                 <TraySkin
@@ -41,8 +49,16 @@
                   status={drive.status}
                   driveType={drive.driveType}
                   label={drive.label}
-                  logoUrl={logos[bay.skinId] ?? null}
+                  logoUrl={brandLogoUrl ?? logos[bay.skinId] ?? null}
+                  hasBrandLogo={!!brandLogoUrl}
                   ledColor={resolveLedColor(skin, ledColors, drive.status)}
+                  role={drive.role}
+                  poolName={drive.poolName}
+                  sizeBytes={drive.sizeBytes}
+                  vendor={drive.vendor}
+                  model={drive.model}
+                  {showRoleColor}
+                  {showRoleIcon}
                 />
               {:else}
                 <div
@@ -59,12 +75,14 @@
         <div class="cards">
           {#each group.cards as card (card.id)}
             {@const cardModules = Array.from({ length: card.moduleCount }, (_, i) => drives[`${card.id}-m${i}`])}
-            <div class="card" title={card.id}>
+            <div class="card" title="{group.label} - {card.label}" style="width:{card.widthPx ?? DEFAULT_PCIE_CARD_WIDTH_PX}px">
               <PcieCarrier
                 carrierId={card.carrierId}
                 label={card.label}
                 moduleCount={card.moduleCount}
                 modules={cardModules}
+                {showRoleColor}
+                {showRoleIcon}
               />
             </div>
           {/each}
@@ -79,6 +97,16 @@
     display: flex;
     flex-direction: column;
     gap: 18px;
+  }
+  .group {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    /* A group's widthPx can exceed the panel's own width (set by the
+       app shell's max-width) - scroll that one group horizontally rather
+       than letting it push the whole page layout wider. */
+    overflow-x: auto;
   }
   .group h3 {
     font-size: 12px;

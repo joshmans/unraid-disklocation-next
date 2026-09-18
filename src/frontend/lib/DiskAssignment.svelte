@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import type { ChassisLayout, Assignments } from "./chassis";
   import type { DiskResult } from "../../graphql/queries";
+  import { ROLE_COLORS, roleLabel, formatSize } from "./role";
 
   const API_BASE = "/plugins/unraid-disklocation-next/api";
 
@@ -12,6 +13,7 @@
   export let disksError = "";
   export let disksLoading = false;
   export let assignments: Assignments;
+  export let showRoleColor = false;
   export let save: (assignments: Assignments) => Promise<{ ok: boolean; error?: string }>;
   export let redetect: () => Promise<void>;
 
@@ -35,7 +37,7 @@
   // Every assignable slot in the layout: a bay id, or `${cardId}-m${index}` per PCIe module.
   $: allSlots = layout.groups.flatMap((g) => {
     if (g.kind === "bays") {
-      return g.bays.map((b) => ({ id: b.id, label: `${g.label} - row ${b.row + 1}, col ${b.col + 1}` }));
+      return g.bays.map((b, i) => ({ id: b.id, label: `${g.label} - Bay ${i + 1}` }));
     }
     return g.cards.flatMap((c) =>
       Array.from({ length: c.moduleCount }, (_, i) => ({
@@ -46,9 +48,36 @@
   });
   $: emptySlots = allSlots.filter((slot) => !assignments[slot.id]);
   $: slotLabel = new Map(allSlots.map((s) => [s.id, s.label]));
+  $: slotOrder = new Map(allSlots.map((s, i) => [s.id, i]));
 
-  $: assignedSerials = new Set(Object.values(assignments));
-  $: unassignedDisks = (disks ?? []).filter((d) => !assignedSerials.has(d.serialNum));
+  interface Row {
+    disk?: DiskResult;
+    bayId?: string;
+    serial: string;
+  }
+
+  // Assigned rows first (per bay assignment, resolved to its disk when
+  // currently detected - unresolved means a bay is assigned to a disk that
+  // isn't showing up right now, e.g. removed/renamed device, still worth
+  // surfacing rather than silently dropping), then every still-unassigned
+  // detected disk. One flat list so zebra striping/sorting apply uniformly
+  // instead of two disconnected sections.
+  $: rows = ((): Row[] => {
+    const bySerial = new Map((disks ?? []).map((d) => [d.serialNum, d]));
+    const assignedRows: Row[] = Object.entries(assignments)
+      .map(([bayId, serial]) => ({ disk: bySerial.get(serial), bayId, serial }))
+      // Object.entries follows insertion order (whenever each bay happened
+      // to get assigned), not bay position - sort by each bay's actual
+      // position in the layout so the list reads top-to-bottom/in-order
+      // instead of however assignment history left it.
+      .sort((a, b) => (slotOrder.get(a.bayId) ?? Infinity) - (slotOrder.get(b.bayId) ?? Infinity));
+    const assignedSerials = new Set(Object.values(assignments));
+    const unassignedRows: Row[] = (disks ?? [])
+      .filter((d) => !assignedSerials.has(d.serialNum))
+      .map((d) => ({ disk: d, serial: d.serialNum }));
+    return [...assignedRows, ...unassignedRows];
+  })();
+  $: unassignedCount = rows.filter((r) => !r.bayId).length;
 
   async function toggleLocate(device: string) {
     const starting = !locating.has(device);
@@ -122,45 +151,68 @@
       <p class="hint">Loading drives...</p>
     {:else}
       <div class="section-header">
-        <h3>Unassigned drives ({unassignedDisks.length})</h3>
+        <h3>Drives ({Object.keys(assignments).length} assigned, {unassignedCount} unassigned)</h3>
         {#if locating.size > 0}
           <button type="button" on:click={stopAllLocate}>Stop all locate ({locating.size})</button>
         {/if}
       </div>
-      {#if unassignedDisks.length === 0}
-        <p class="hint">Every detected drive is assigned to a bay.</p>
+      {#if rows.length === 0}
+        <p class="hint">No drives detected yet.</p>
       {/if}
-      {#each unassignedDisks as disk (disk.id)}
-        <div class="drive-row">
-          <div class="drive-info">
-            <strong>{disk.vendor} {disk.name}</strong>
-            <span class="mono">{disk.serialNum}</span>
-            <span class="hint">{disk.interfaceType} - {(disk.size / 1e9).toFixed(0)} GB</span>
+      <div class="drive-list">
+        {#each rows as row (row.bayId ?? row.serial)}
+          {@const role = row.disk?.role}
+          <div
+            class="drive-row"
+            class:role-tinted={showRoleColor}
+            style="--role-color:{role ? ROLE_COLORS[role] : 'transparent'}"
+          >
+            <div class="drive-info">
+              {#if row.disk}
+                <strong>{row.disk.vendor} {row.disk.name}</strong>
+                <span class="mono">{row.serial}</span>
+                <span class="hint">
+                  {row.disk.interfaceType}{#if formatSize(row.disk.sizeBytes)} - {formatSize(row.disk.sizeBytes)}{/if}
+                  {#if role} - {roleLabel(role, row.disk.poolName)}{/if}
+                </span>
+              {:else}
+                <strong>Not currently detected</strong>
+                <span class="mono">{row.serial}</span>
+              {/if}
+            </div>
+            {#if row.bayId}
+              <span class="mono bay-label">{slotLabel.get(row.bayId) ?? row.bayId}</span>
+              {#if row.disk}
+                <button
+                  type="button"
+                  class:active={locating.has(row.disk.device)}
+                  on:click={() => toggleLocate(row.disk.device)}
+                >
+                  {locating.has(row.disk.device) ? "Stop" : "Locate"}
+                </button>
+              {/if}
+              <button type="button" on:click={() => unassign(row.bayId)}>Unassign</button>
+            {:else if row.disk}
+              <button
+                type="button"
+                class:active={locating.has(row.disk.device)}
+                on:click={() => toggleLocate(row.disk.device)}
+              >
+                {locating.has(row.disk.device) ? "Stop" : "Locate"}
+              </button>
+              <select bind:value={selectedBay[row.disk.serialNum]}>
+                <option value="">Assign to...</option>
+                {#each emptySlots as slot (slot.id)}
+                  <option value={slot.id}>{slot.label}</option>
+                {/each}
+              </select>
+              <button type="button" disabled={!selectedBay[row.disk.serialNum]} on:click={() => assign(row.disk)}>
+                Assign
+              </button>
+            {/if}
           </div>
-          <button type="button" class:active={locating.has(disk.device)} on:click={() => toggleLocate(disk.device)}>
-            {locating.has(disk.device) ? "Stop" : "Locate"}
-          </button>
-          <select bind:value={selectedBay[disk.serialNum]}>
-            <option value="">Assign to...</option>
-            {#each emptySlots as slot (slot.id)}
-              <option value={slot.id}>{slot.label}</option>
-            {/each}
-          </select>
-          <button type="button" disabled={!selectedBay[disk.serialNum]} on:click={() => assign(disk)}>Assign</button>
-        </div>
-      {/each}
-
-      <h3>Assigned bays ({Object.keys(assignments).length})</h3>
-      {#if Object.keys(assignments).length === 0}
-        <p class="hint">No bays assigned yet.</p>
-      {/if}
-      {#each Object.entries(assignments) as [bayId, serial] (bayId)}
-        <div class="drive-row">
-          <span class="mono">{slotLabel.get(bayId) ?? bayId}</span>
-          <span class="mono">{serial}</span>
-          <button type="button" on:click={() => unassign(bayId)}>Unassign</button>
-        </div>
-      {/each}
+        {/each}
+      </div>
     {/if}
   {/if}
   {#if status === "error"}<p class="err">Error: {errorMessage}</p>{/if}
@@ -183,12 +235,26 @@
   .hint {
     color: var(--muted);
   }
+  .drive-list {
+    display: flex;
+    flex-direction: column;
+  }
   .drive-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 0;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--border);
+    border-left: 3px solid transparent;
+  }
+  /* Zebra striping so a long real array's rows stay visually separable at a
+     glance - nth-child works cleanly here since rows are the only direct
+     children of .drive-list (no interleaved headers breaking the count). */
+  .drive-row:nth-child(even) {
+    background: rgba(255, 255, 255, 0.025);
+  }
+  .drive-row.role-tinted {
+    border-left-color: var(--role-color);
   }
   .drive-info {
     display: flex;
@@ -196,6 +262,9 @@
     gap: 2px;
     flex: 1 1 auto;
     min-width: 0;
+  }
+  .bay-label {
+    color: var(--muted);
   }
   .mono {
     font: 12px ui-monospace, "SFMono-Regular", Menlo, monospace;

@@ -1,16 +1,103 @@
-**Disk Location: Next**
+# Disk Location: Next
 
-A ground-up rewrite of the [Disk Location](https://github.com/joshmans/unraid-disklocation) Unraid
-plugin concept — locating drives and mapping them to a graphical tray/bay layout — built as a
-standalone TypeScript/Node.js service that talks to Unraid's native `unraid-api` GraphQL
-interface (Unraid 7.2+), instead of a classic PHP webGUI plugin parsing `/var/local/emhttp` and
-shelling out to `smartctl` directly.
+A ground-up rewrite of the [Disk Location](https://github.com/joshmans/unraid-disklocation)
+Unraid plugin concept: a visual map of which physical bay/tray/PCIe slot each of your drives
+lives in, plus SMART health history over time. This version is a standalone TypeScript/Node.js
+service that talks to Unraid's native `unraid-api` GraphQL interface (Unraid 7.2+) and Unraid's
+own runtime state files, instead of a classic PHP webGUI plugin.
 
-This is a **separate codebase**, not a fork or a migration of the PHP plugin. No PHP code,
-files, or history carry over — only the underlying idea (a visual tray/bay map, SMART health
-history over time) and the lessons learned building the original. See
-[ROADMAP.md](ROADMAP.md) for the architecture decisions and open questions behind that choice.
+This is a **separate codebase** from the original plugin - no PHP code, files, or history carry
+over, only the underlying idea and the lessons learned building it. See [ROADMAP.md](ROADMAP.md)
+for the full architecture history, every real API gap this project ran into (and how each was
+worked around), and what's still open.
 
-Status: early scaffolding, not yet functional.
+## Features
 
-Licensed under the MIT License — see [LICENSE](LICENSE).
+- **Tray/bay drive map.** A chassis is modeled as a list of physical groups (a front hot-swap
+  cage, a rear cage, a PCIe carrier card) rather than one flat grid, matching how real hardware
+  is actually laid out. Each bay renders with a directory-discovered **tray-skin** (`classic`, an
+  unbranded `generic`, and unofficial fan-styled recreations of SuperMicro/Dell/HP/NetApp
+  hardware) or, for M.2/U.2 drives, a **PCIe carrier** shell (default, plus unofficial
+  ASUS/SuperMicro/HPE-style quad-NVMe carriers) - both are plain SVGs you can add to without
+  touching any code.
+- **Per-bay drive info at a glance**: SMART-status LED (color configurable per skin/status),
+  drive-type icon (HDD/SSD/NVMe), array role (parity/data/cache/boot/unassigned - with cache pool
+  name), exact capacity, and make/model - shown as text when there's no logo, or a manufacturer
+  logo when there is. Role coloring and role badges are independent, optional toggles.
+- **Disk assignment**, in bay-position order, with a **Locate** button (blinks the real drive's
+  activity LED via repeated `smartctl` queries) on both unassigned and already-assigned drives, so
+  you can sanity-check an assignment without guessing.
+- **Brand-logo system**: a hotlinked URL or a locally-uploaded SVG per detected drive brand
+  (auto-detected from the drive's own vendor/model string, overridable per bay), separate from
+  each tray skin's own chassis-branding logo - a Dell-skinned bay doesn't mean a Dell drive.
+- **Import from the classic Disk Location plugin**, if it's still installed: matches its saved
+  tray assignments to your currently-connected drives by recomputing its own identity hash, and
+  previews the match count before touching anything.
+- **SMART History tab**: temperature, power-on hours, and reallocated/pending/uncorrectable
+  sector trend charts per drive, derived from periodic `smartctl` polls (a drive in standby is
+  never woken just to sample it).
+- **Layout sizing controls**: per-group and per-card widths, plus an overall app-width setting,
+  so a large chassis isn't squeezed into a fixed layout.
+- **Daemon control from the Settings tab**: start/stop/restart and change the listening port,
+  even when the daemon itself is down - this goes through Unraid's own always-running PHP/nginx
+  layer, not the daemon's own API (which is exactly what's unreachable in that case).
+
+## Requirements
+
+- Unraid 7.2 or later (this is the first version to ship `unraid-api`; there's no lower floor to
+  design around).
+- An `unraid-api` API key with read access to disk/array data. Generate one from Unraid's own
+  Settings > Management Access (or `unraid-api apikey` on the command line) - see the
+  [unraid-api docs](https://github.com/unraid/api) for the exact steps on your version.
+
+## Installing
+
+Not yet in Community Applications - install by pasting this repo's `.plg` URL directly into
+Unraid's **Plugins > Install Plugin** field:
+
+```
+https://raw.githubusercontent.com/joshmans/unraid-disklocation-next/master/plugin/unraid-disklocation-next.plg
+```
+
+A Community Apps entry is planned as a fast-follow once a real tagged release has been installed
+and verified on a live box (see ROADMAP.md's open questions).
+
+### First-run configuration
+
+Open **Tools > Disk Location Next > Settings > Unraid API connection** and enter your GraphQL
+URL (typically `https://localhost/graphql`, since the daemon runs on the box itself) and API key.
+Everything else (chassis layout, disk assignments, skins, brand logos, LED colors, SMART-history
+retention) is configured entirely from the plugin's own Tools page too - no config files to
+hand-edit.
+
+## Using it
+
+Open **Tools > Disk Location Next**. Five tabs:
+
+- **Tray Map** - the live, read-only chassis view. Shows "the plugin's service isn't running"
+  with a Start button if the daemon is down, instead of silently falling back to sample data.
+- **Disk Assignment** - assign a detected disk (by serial number, stable across reboots) to an
+  empty bay/module, or Locate one to confirm it physically.
+- **Drive Identity** - the brand-logo URL/upload table and per-bay brand overrides.
+- **Settings** - chassis layout editor (groups, rows/columns, skins, PCIe carriers, sizing),
+  manufacturer/skin logos, per-skin LED colors, role display toggles, SMART-history storage
+  location and retention, daemon start/stop/restart and port, and the classic-plugin import.
+- **SMART History** - trend charts for temperature, power-on hours, and sector health, for any
+  drive `unraid-api` reports (not just ones you've assigned a bay to yet).
+
+## Contributing
+
+Same house rules as the original plugin: one branch per feature, PR'd and merged individually,
+commit messages explaining *why* not just *what*. A tray-skin or PCIe-carrier contribution is
+just a new SVG pair + `meta.json` under `assets/` - see
+[assets/tray-skins/README.md](assets/tray-skins/README.md) and
+[assets/pcie-carrier/README.md](assets/pcie-carrier/README.md). Never bundle or redistribute a
+real trademarked manufacturer logo - logos stay strictly in the user-configured logo/brand
+system, never shipped with the plugin itself.
+
+See [ROADMAP.md](ROADMAP.md) for the architecture decisions, every real `unraid-api` quirk this
+project found and worked around, and what's still open.
+
+## License
+
+MIT - see [LICENSE](LICENSE).

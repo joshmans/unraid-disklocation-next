@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 150">
+  <rect x="0.5" y="0.5" width="519" height="149" rx="5" fill="#20241f" stroke="#0f120e"/>
+  <rect x="0.5" y="2" width="519" height="3" fill="#6cc24a"/>
+  <rect x="16" y="14" width="64" height="120" rx="3" fill="#c7c9c6"/>
+  <g fill="#9a9c99">
+    <rect x="20" y="18" width="56" height="4"/>
+    <rect x="20" y="28" width="56" height="4"/>
+    <rect x="20" y="38" width="56" height="4"/>
+    <rect x="20" y="48" width="56" height="4"/>
+    <rect x="20" y="58" width="56" height="4"/>
+    <rect x="20" y="68" width="56" height="4"/>
+    <rect x="20" y="78" width="56" height="4"/>
+    <rect x="20" y="88" width="56" height="4"/>
+    <rect x="20" y="98" width="56" height="4"/>
+    <rect x="20" y="108" width="56" height="4"/>
+    <rect x="20" y="118" width="56" height="4"/>
+    <rect x="20" y="128" width="56" height="4"/>
+  </g>
+  <g fill="#c9a227">
+    <rect x="60" y="140" width="8" height="14"/><rect x="72" y="140" width="8" height="14"/><rect x="84" y="140" width="8" height="14"/><rect x="96" y="140" width="8" height="14"/>
+    <rect x="108" y="140" width="8" height="14"/><rect x="120" y="140" width="8" height="14"/><rect x="132" y="140" width="8" height="14"/><rect x="144" y="140" width="8" height="14"/>
+    <rect x="156" y="140" width="8" height="14"/><rect x="168" y="140" width="8" height="14"/><rect x="180" y="140" width="8" height="14"/><rect x="192" y="140" width="8" height="14"/>
+    <rect x="204" y="140" width="8" height="14"/><rect x="216" y="140" width="8" height="14"/><rect x="228" y="140" width="8" height="14"/><rect x="240" y="140" width="8" height="14"/>
+    <rect x="252" y="140" width="8" height="14"/><rect x="264" y="140" width="8" height="14"/><rect x="276" y="140" width="8" height="14"/><rect x="288" y="140" width="8" height="14"/>
+    <rect x="300" y="140" width="8" height="14"/><rect x="312" y="140" width="8" height="14"/><rect x="324" y="140" width="8" height="14"/><rect x="336" y="140" width="8" height="14"/>
+    <rect x="348" y="140" width="8" height="14"/><rect x="360" y="140" width="8" height="14"/><rect x="372" y="140" width="8" height="14"/><rect x="384" y="140" width="8" height="14"/>
+    <rect x="396" y="140" width="8" height="14"/><rect x="408" y="140" width="8" height="14"/><rect x="420" y="140" width="8" height="14"/><rect x="432" y="140" width="8" height="14"/>
+  </g>
+</svg>

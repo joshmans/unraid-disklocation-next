@@ -4,16 +4,28 @@
   import Settings from "./lib/Settings.svelte";
   import DiskAssignment from "./lib/DiskAssignment.svelte";
   import SmartHistory from "./lib/SmartHistory.svelte";
-  import { driveIconMeta } from "./lib/driveicons";
+  import { driveIconMeta, driveIconSvg } from "./lib/driveicons";
+  import DriveIdentity from "./lib/DriveIdentity.svelte";
   import { exampleDrives, emptyLayout } from "./lib/chassis";
-  import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive, BayGroup, DriveStatus } from "./lib/chassis";
+  import type {
+    ChassisLayout,
+    LogoConfig,
+    LedColorConfig,
+    Assignments,
+    BayDrive,
+    BayGroup,
+    PcieGroup,
+    DriveStatus,
+    BrandLogoConfig,
+    ManufacturerOverrides,
+  } from "./lib/chassis";
   import type { DiskResult } from "../graphql/queries";
   import { driveFromDisk } from "../shared/derive-drive";
   import { startDaemon as phpStartDaemon } from "./lib/daemon-control";
 
   const API_BASE = "/plugins/unraid-disklocation-next/api";
 
-  type Tab = "map" | "assign" | "settings" | "history";
+  type Tab = "map" | "assign" | "identity" | "settings" | "history";
   let activeTab: Tab = "map";
 
   let liveLayout: ChassisLayout = emptyLayout;
@@ -21,6 +33,10 @@
   let liveLedColors: LedColorConfig = {};
   let liveAssignments: Assignments = {};
   let liveSmartHistoryDbPath = "";
+  let liveShowRoleColor = false;
+  let liveShowRoleIcon = false;
+  let liveBrandLogos: BrandLogoConfig = {};
+  let liveManufacturerOverrides: ManufacturerOverrides = {};
   let disks: DiskResult[] | null = null;
   let disksError = "";
   let disksLoading = false;
@@ -73,6 +89,10 @@
           liveAssignments = stored.assignments ?? {};
           liveLedColors = stored.ledColors ?? {};
           liveSmartHistoryDbPath = stored.smartHistoryDbPath ?? "";
+          liveShowRoleColor = stored.showRoleColor ?? false;
+          liveShowRoleIcon = stored.showRoleIcon ?? false;
+          liveBrandLogos = stored.brandLogos ?? {};
+          liveManufacturerOverrides = stored.manufacturerOverrides ?? {};
         } else {
           productionEmpty = true;
           liveLayout = emptyLayout;
@@ -154,6 +174,10 @@
     ledColors?: LedColorConfig;
     assignments?: Assignments;
     smartHistoryDbPath?: string;
+    showRoleColor?: boolean;
+    showRoleIcon?: boolean;
+    brandLogos?: BrandLogoConfig;
+    manufacturerOverrides?: ManufacturerOverrides;
   }): Promise<{ ok: boolean; error?: string }> {
     const merged = {
       layout: next.layout ?? liveLayout,
@@ -161,6 +185,10 @@
       ledColors: next.ledColors ?? liveLedColors,
       assignments: next.assignments ?? liveAssignments,
       smartHistoryDbPath: next.smartHistoryDbPath ?? liveSmartHistoryDbPath,
+      showRoleColor: next.showRoleColor ?? liveShowRoleColor,
+      showRoleIcon: next.showRoleIcon ?? liveShowRoleIcon,
+      brandLogos: next.brandLogos ?? liveBrandLogos,
+      manufacturerOverrides: next.manufacturerOverrides ?? liveManufacturerOverrides,
     };
     try {
       const res = await fetch(`${API_BASE}/layout`, {
@@ -174,6 +202,10 @@
       liveLedColors = merged.ledColors;
       liveAssignments = merged.assignments;
       liveSmartHistoryDbPath = merged.smartHistoryDbPath;
+      liveShowRoleColor = merged.showRoleColor;
+      liveShowRoleIcon = merged.showRoleIcon;
+      liveBrandLogos = merged.brandLogos;
+      liveManufacturerOverrides = merged.manufacturerOverrides;
       // A successful save proves the daemon is reachable, so this always
       // reflects real state going forward (not just the initial classification).
       productionEmpty = merged.layout.groups.length === 0;
@@ -183,16 +215,45 @@
     }
   }
 
-  function saveSettings(layout: ChassisLayout, logos: LogoConfig, ledColors: LedColorConfig, smartHistoryDbPath: string) {
-    return persistAll({ layout, logos, ledColors, smartHistoryDbPath });
+  function saveSettings(
+    layout: ChassisLayout,
+    logos: LogoConfig,
+    ledColors: LedColorConfig,
+    smartHistoryDbPath: string,
+    showRoleColor: boolean,
+    showRoleIcon: boolean,
+  ) {
+    return persistAll({ layout, logos, ledColors, smartHistoryDbPath, showRoleColor, showRoleIcon });
   }
 
   function saveAssignments(assignments: Assignments) {
     return persistAll({ assignments });
   }
 
+  function saveIdentity(brandLogos: BrandLogoConfig, manufacturerOverrides: ManufacturerOverrides) {
+    return persistAll({ brandLogos, manufacturerOverrides });
+  }
+
   function importClassic(groups: BayGroup[], assignments: Assignments) {
     return persistAll({ layout: { ...liveLayout, groups }, assignments });
+  }
+
+  // Settings.svelte builds the replacement PcieGroup and the old-bay-id ->
+  // new-module-id remap (it already knows the group's bays), but only
+  // App.svelte holds the authoritative liveAssignments, so the actual
+  // remap - and persisting layout+assignments together, atomically, so a
+  // reload never shows the new group with the old group's now-dangling
+  // assignments - happens here.
+  function convertGroupToPcie(oldGroupId: string, pcieGroup: PcieGroup, idRemap: Record<string, string>) {
+    const nextAssignments = { ...liveAssignments };
+    for (const [oldId, newId] of Object.entries(idRemap)) {
+      if (nextAssignments[oldId] !== undefined) {
+        nextAssignments[newId] = nextAssignments[oldId];
+        delete nextAssignments[oldId];
+      }
+    }
+    const groups = liveLayout.groups.map((g) => (g.id === oldGroupId ? pcieGroup : g));
+    return persistAll({ layout: { ...liveLayout, groups }, assignments: nextAssignments });
   }
 </script>
 
@@ -203,6 +264,9 @@
     </button>
     <button type="button" class:active={activeTab === "assign"} on:click={() => (activeTab = "assign")}>
       Disk Assignment
+    </button>
+    <button type="button" class:active={activeTab === "identity"} on:click={() => (activeTab = "identity")}>
+      Drive Identity
     </button>
     <button type="button" class:active={activeTab === "history"} on:click={() => (activeTab = "history")}>
       SMART History
@@ -230,14 +294,30 @@
           {liveLayout.name}
           {#if !disks}- occupancy shown here is sample data ({disksError || "loading drives..."}).{/if}
         </p>
-        <TrayMap layout={liveLayout} drives={liveDrives} logos={liveLogos} ledColors={liveLedColors} />
+        <TrayMap
+          layout={liveLayout}
+          drives={liveDrives}
+          logos={liveLogos}
+          ledColors={liveLedColors}
+          showRoleColor={liveShowRoleColor}
+          showRoleIcon={liveShowRoleIcon}
+          brandLogos={liveBrandLogos}
+          manufacturerOverrides={liveManufacturerOverrides}
+        />
 
-        <h2>Drive types</h2>
-        <ul class="legend">
-          {#each Object.entries(driveIconMeta) as [type, info] (type)}
-            <li><strong>{info.name}</strong> - {info.description}</li>
-          {/each}
-        </ul>
+        <section class="legend-panel">
+          <h2>Drive types</h2>
+          <div class="legend">
+            {#each Object.entries(driveIconMeta) as [type, info] (type)}
+              <div class="legend-item">
+                <div class="legend-icon" style="background:{info.color}">
+                  <div class="glyph">{@html driveIconSvg[type] ?? ""}</div>
+                </div>
+                <div class="legend-text"><strong>{info.name}</strong> - {info.description}</div>
+              </div>
+            {/each}
+          </div>
+        </section>
       {/if}
     {:else}
       <p class="status">Loading layout...</p>
@@ -251,8 +331,20 @@
       {disksError}
       {disksLoading}
       assignments={liveAssignments}
+      showRoleColor={liveShowRoleColor}
       save={saveAssignments}
       redetect={loadDisks}
+    />
+  </section>
+
+  <section class="tab-panel" class:hidden={activeTab !== "identity"}>
+    <DriveIdentity
+      layout={liveLayout}
+      assignments={liveAssignments}
+      {disks}
+      initialBrandLogos={liveBrandLogos}
+      initialManufacturerOverrides={liveManufacturerOverrides}
+      save={saveIdentity}
     />
   </section>
 
@@ -267,8 +359,11 @@
         initialLogos={liveLogos}
         initialLedColors={liveLedColors}
         initialSmartHistoryDbPath={liveSmartHistoryDbPath}
+        initialShowRoleColor={liveShowRoleColor}
+        initialShowRoleIcon={liveShowRoleIcon}
         save={saveSettings}
         {importClassic}
+        {convertGroupToPcie}
       />
     {:else}
       <p class="status">Loading layout...</p>
@@ -292,7 +387,14 @@
     --accent-critical: #c9463c;
 
     font-family: system-ui, -apple-system, sans-serif;
-    max-width: 720px;
+    /* 720px was fine for the original single-column form layouts, but it
+       silently capped every tray/group grid to that width too - a bay
+       group set to "fill available space" was really only ever filling
+       this box, not the actual browser window, on anything wider than a
+       narrow pane. 1400px is a generous dashboard-style cap; still finite
+       so text-heavy tabs (Settings) don't stretch to unreadable line
+       lengths on an ultrawide monitor. */
+    max-width: 1400px;
     background: var(--bg);
     color: var(--fg);
     padding: 16px 20px 24px;
@@ -333,9 +435,72 @@
   .status.err {
     color: var(--accent-critical);
   }
+  .legend-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-top: 18px;
+  }
+  .legend-panel h2 {
+    margin-top: 0;
+  }
+  /* One horizontal row of icon-above-description columns by default (there
+     are only 3 drive types, so this comfortably fits at the app shell's
+     normal widths) - the 480px breakpoint below falls back to a plain
+     icon-left/text-right stacked list once a column would get too narrow
+     for the description to read well. */
   .legend {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .legend-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
     font-size: 13px;
-    padding-left: 18px;
+    flex: 1 1 160px;
+    min-width: 140px;
+    max-width: 240px;
+  }
+  .legend-icon {
+    flex: 0 0 auto;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+  }
+  .legend-icon .glyph {
+    width: 58%;
+    height: 58%;
+  }
+  .legend-icon .glyph :global(svg) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  @media (max-width: 480px) {
+    .legend {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      gap: 10px;
+    }
+    .legend-item {
+      flex-direction: row;
+      text-align: left;
+      max-width: none;
+    }
+    .legend-icon {
+      width: 32px;
+      height: 32px;
+    }
   }
   main button {
     background: var(--bg);

@@ -7,11 +7,28 @@ export type Orientation = "horizontal" | "vertical";
 export type DriveType = "hdd" | "ssd" | "nvme";
 export type DriveStatus = "ok" | "warn" | "critical";
 
+/**
+ * A disk's Unraid array/pool role - derived server-side from
+ * /var/local/emhttp/disks.ini + devs.ini (see array-state.ts), not from
+ * unraid-api's GraphQL schema, which has no per-disk pool-name field at all
+ * (confirmed 2026-09 against the real schema - see ROADMAP.md). "unassigned"
+ * covers both a disk devs.ini lists with no array/pool membership, and the
+ * fallback when this plugin's own /disks enrichment step can't be run.
+ */
+export type DriveRole = "parity" | "data" | "cache" | "boot" | "unassigned";
+
 /** What a bay or PCIe module slot renders when occupied; absent = empty. */
 export interface BayDrive {
   driveType: DriveType;
   status: DriveStatus;
   label: string;
+  role?: DriveRole;
+  /** Only meaningful when role is "cache" - the real pool name (e.g. "nvcache"), not just the generic role. Absent means role is unknown or not a cache disk. */
+  poolName?: string;
+  sizeBytes?: number;
+  /** Raw vendor/model strings (unraid-api's disk.vendor/disk.name) - kept separate from `label` (serial-first) purely for brand.ts's detection, see role.ts's sibling brand.ts. */
+  vendor?: string;
+  model?: string;
 }
 
 export interface BayConfig {
@@ -32,6 +49,8 @@ export interface BayGroup {
   rows: number;
   columns: number;
   bays: BayConfig[];
+  /** Optional explicit rendered width in px for this group's whole grid on the Tray Map. Absent (the default) fills the available container width, same as before this existed. */
+  widthPx?: number;
 }
 
 export interface PcieCardConfig {
@@ -42,7 +61,12 @@ export interface PcieCardConfig {
   /** e.g. "Slot 3 - x16" */
   label: string;
   moduleCount: number;
+  /** Rendered width in px on the Tray Map; the shell's fixed aspect ratio (520:150) sets the height. Absent (cards saved before this existed) falls back to DEFAULT_PCIE_CARD_WIDTH_PX. */
+  widthPx?: number;
 }
+
+/** 220 (the original hardcoded TrayMap.svelte width) read as "tiny" once real module rows/text were on it - this is the new default for a freshly added card. */
+export const DEFAULT_PCIE_CARD_WIDTH_PX = 380;
 
 export interface PcieGroup {
   kind: "pcie";
@@ -61,6 +85,12 @@ export interface ChassisLayout {
 
 /** Hotlinked manufacturer logo URL per tray-skin id - kept separate from the skins themselves so a skin PR never needs to carry a logo (see assets/tray-skins/README.md). */
 export type LogoConfig = Record<string, string>;
+
+/** Hotlinked logo URL per detected drive-brand id (see brand.ts) - a bay's logo prefers this (its occupying drive's real manufacturer) over its tray skin's LogoConfig entry, which is only a fallback for an empty bay or an undetected brand. */
+export type BrandLogoConfig = Record<string, string>;
+
+/** Manual brand-id override per bay/module id, for when auto-detection (brand.ts, from the drive's vendor/model strings) gets it wrong or can't tell - e.g. a rebadged/OEM drive. Absent means trust auto-detection. */
+export type ManufacturerOverrides = Record<string, string>;
 
 /** Which physical disk (by serial number, stable across reboots/device renumbering) occupies which bay/module id. */
 export type Assignments = Record<string, string>;
@@ -90,4 +120,12 @@ export interface StoredLayout {
    * often a flash drive with real write-cycle limits.
    */
   smartHistoryDbPath?: string;
+  /** Tint a bay/module by its DriveRole (see role.ts's ROLE_COLORS). Independent of showRoleIcon - both, either, or neither can be on. Absent = off. */
+  showRoleColor?: boolean;
+  /** Badge a bay/module with a role letter (P/D/C/B) and, for cache, its pool name in the tooltip. Independent of showRoleColor. Absent = off. */
+  showRoleIcon?: boolean;
+  /** Optional for backward compatibility with layout.json files saved before drive-brand logos existed. */
+  brandLogos?: BrandLogoConfig;
+  /** Optional for backward compatibility with layout.json files saved before per-bay brand overrides existed. */
+  manufacturerOverrides?: ManufacturerOverrides;
 }

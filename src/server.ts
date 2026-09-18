@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
-import { loadSettings } from "./config.js";
+import { loadSettings, saveSettings } from "./config.js";
 import { loadLayoutConfig, saveLayoutConfig } from "./layout.js";
 import { getDisks } from "./graphql/client.js";
 import { startLocate, stopLocate, stopAllLocate, activeLocateDevices } from "./locate.js";
 import { startNginxSelfHeal } from "./nginx.js";
 import { startSmartHistoryPolling, getLatestStatuses, getHistory } from "./smart-history.js";
 import { previewImport } from "./classic-import.js";
+import { enrichWithArrayState } from "./array-state.js";
+import { saveLogo, readLogo, logoFilename } from "./logos.js";
 
 // Deliberately no web framework - still just node:http. Routes beyond the
 // health check are proxied at /plugins/unraid-disklocation-next/api/ (see
@@ -30,6 +32,36 @@ const server = createServer(async (req, res) => {
     const settings = loadSettings();
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ ok: true, configured: settings !== null }));
+    return;
+  }
+
+  // apiKey never round-trips back to the browser once saved - GET only says
+  // whether one is set, matching how a secret field is normally handled.
+  // POST omitting/blanking apiKey keeps whatever's already saved, so a user
+  // can update just graphqlUrl (or vice versa) without re-pasting the key.
+  if (req.url === "/settings" && req.method === "GET") {
+    const settings = loadSettings();
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ graphqlUrl: settings?.graphqlUrl ?? "", apiKeySet: !!settings?.apiKey }));
+    return;
+  }
+
+  if (req.url === "/settings" && req.method === "POST") {
+    try {
+      const { apiKey, graphqlUrl } = JSON.parse(await readBody(req));
+      if (typeof graphqlUrl !== "string" || !graphqlUrl.trim()) {
+        throw new Error("graphqlUrl is required");
+      }
+      const existing = loadSettings();
+      const nextApiKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : existing?.apiKey;
+      if (!nextApiKey) throw new Error("apiKey is required");
+      saveSettings({ apiKey: nextApiKey, graphqlUrl: graphqlUrl.trim() });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: String(err) }));
+    }
     return;
   }
 
@@ -63,7 +95,7 @@ const server = createServer(async (req, res) => {
     try {
       const disks = await getDisks(settings);
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(disks));
+      res.end(JSON.stringify(enrichWithArrayState(disks)));
     } catch (err) {
       res.writeHead(502, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: String(err) }));
@@ -119,6 +151,36 @@ const server = createServer(async (req, res) => {
       res.writeHead(502, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: String(err) }));
     }
+    return;
+  }
+
+  // Local-asset logos (user-uploaded SVGs), as an alternative to a hotlinked
+  // URL, for both tray-skin logos (Settings) and drive-brand logos (Drive
+  // Identity) - one upload/serve mechanism, kind distinguishes the two only
+  // for filename namespacing (see logos.ts).
+  if (url.pathname === "/logos" && req.method === "POST") {
+    try {
+      const { kind, id, svg } = JSON.parse(await readBody(req));
+      if (kind !== "skin" && kind !== "brand") throw new Error('kind must be "skin" or "brand"');
+      saveLogo(kind, id, svg);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, url: `/logos/${logoFilename(kind, id)}` }));
+    } catch (err) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: String(err) }));
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/logos/") && req.method === "GET") {
+    const svg = readLogo(url.pathname.slice("/logos/".length));
+    if (svg === null) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.writeHead(200, { "content-type": "image/svg+xml" });
+    res.end(svg);
     return;
   }
 

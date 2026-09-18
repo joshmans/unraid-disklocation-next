@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { ChassisLayout, BayGroup, PcieGroup, BayConfig, LogoConfig, LedColorConfig, DriveStatus, Orientation } from "./chassis";
+  import { DEFAULT_PCIE_CARD_WIDTH_PX } from "./chassis";
   import { skins } from "./trayskins";
   import { pcieCarriers } from "./pciecarriers";
   import { resolveLedColor } from "./status";
-  import { getDaemonStatus, startDaemon, setDaemonPort, type DaemonStatus } from "./daemon-control";
+  import { getDaemonStatus, startDaemon, stopDaemon, setDaemonPort, type DaemonStatus } from "./daemon-control";
+  import { uploadLogoFile } from "./logo-upload";
 
   // App.svelte owns the fetch/persist and the assignments this layout's bay
   // ids get joined against elsewhere, so it stays the single source of truth
@@ -15,15 +17,24 @@
   export let initialLogos: LogoConfig;
   export let initialLedColors: LedColorConfig;
   export let initialSmartHistoryDbPath = "";
+  export let initialShowRoleColor = false;
+  export let initialShowRoleIcon = false;
   export let save: (
     layout: ChassisLayout,
     logos: LogoConfig,
     ledColors: LedColorConfig,
     smartHistoryDbPath: string,
+    showRoleColor: boolean,
+    showRoleIcon: boolean,
   ) => Promise<{ ok: boolean; error?: string }>;
   export let importClassic: (
     groups: BayGroup[],
     assignments: Record<string, string>,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  export let convertGroupToPcie: (
+    oldGroupId: string,
+    pcieGroup: PcieGroup,
+    idRemap: Record<string, string>,
   ) => Promise<{ ok: boolean; error?: string }>;
 
   const API_BASE = "/plugins/unraid-disklocation-next/api";
@@ -36,6 +47,7 @@
     matchedCount?: number;
     totalLocations?: number;
     skippedGroups?: { name: string; reason: string }[];
+    outOfRange?: { groupName: string; tray: number }[];
   }
 
   function clone<T>(value: T): T {
@@ -46,6 +58,8 @@
   let logos: LogoConfig = { ...initialLogos };
   let ledColors: LedColorConfig = clone(initialLedColors);
   let smartHistoryDbPath = initialSmartHistoryDbPath;
+  let showRoleColor = initialShowRoleColor;
+  let showRoleIcon = initialShowRoleIcon;
   let status: "idle" | "saving" | "saved" | "error" = "idle";
   let errorMessage = "";
 
@@ -74,6 +88,65 @@
     }
   });
 
+  // apiKey is never sent back down from GET /settings once saved (see
+  // server.ts) - apiKeySet just says whether one already exists, and the
+  // input starts blank; leaving it blank on save keeps whatever's stored.
+  let apiGraphqlUrl = "";
+  let apiKeyDraft = "";
+  let apiKeySet = false;
+  let apiConnStatus: "idle" | "loading" | "saving" | "saved" | "error" = "loading";
+  let apiConnMessage = "";
+
+  // The daemon runs on the same box as the webGUI that's serving this page
+  // right now, so the current page's own host is a reliable guess at the
+  // GraphQL endpoint's host too - only used to prefill a brand-new install's
+  // still-empty field (never overwrites a saved value), and the user can
+  // still edit it before saving.
+  function guessGraphqlUrl(): string {
+    const { protocol, hostname, port } = window.location;
+    const standardPort = protocol === "https:" ? "443" : "80";
+    const portSuffix = port && port !== standardPort ? `:${port}` : "";
+    return `${protocol}//${hostname}${portSuffix}/graphql`;
+  }
+
+  onMount(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        apiGraphqlUrl = data.graphqlUrl || guessGraphqlUrl();
+        apiKeySet = !!data.apiKeySet;
+      }
+      apiConnStatus = "idle";
+    } catch {
+      apiConnStatus = "error";
+      apiConnMessage = "Couldn't reach the daemon";
+    }
+  });
+
+  async function onSaveApiSettingsClick() {
+    apiConnStatus = "saving";
+    apiConnMessage = "";
+    try {
+      const res = await fetch(`${API_BASE}/settings`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ apiKey: apiKeyDraft || undefined, graphqlUrl: apiGraphqlUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      apiKeySet = apiKeySet || !!apiKeyDraft;
+      apiKeyDraft = "";
+      apiConnStatus = "saved";
+      setTimeout(() => {
+        if (apiConnStatus === "saved") apiConnStatus = "idle";
+      }, 2000);
+    } catch (err) {
+      apiConnStatus = "error";
+      apiConnMessage = err instanceof Error ? err.message : String(err);
+    }
+  }
+
   async function onImportClassicClick() {
     if (!classicPreview?.groups) return;
     classicImporting = true;
@@ -88,6 +161,15 @@
     daemonMessage = "";
     const result = await startDaemon();
     daemonMessage = result.message ?? (result.ok ? "Started" : "Failed to start");
+    daemonActionInFlight = false;
+    setTimeout(refreshDaemonStatus, 1500);
+  }
+
+  async function onStopDaemonClick() {
+    daemonActionInFlight = true;
+    daemonMessage = "";
+    const result = await stopDaemon();
+    daemonMessage = result.message ?? (result.ok ? "Stopped" : "Failed to stop");
     daemonActionInFlight = false;
     setTimeout(refreshDaemonStatus, 1500);
   }
@@ -147,6 +229,12 @@
     layout = layout;
   }
 
+  function setGroupWidth(group: BayGroup, raw: string) {
+    const trimmed = raw.trim();
+    group.widthPx = trimmed ? Math.max(200, +trimmed) : undefined;
+    layout = layout;
+  }
+
   function addGroup(kind: "bays" | "pcie") {
     const group: BayGroup | PcieGroup =
       kind === "bays"
@@ -162,6 +250,38 @@
 
   function removeGroup(id: string) {
     layout.groups = layout.groups.filter((g) => g.id !== id);
+  }
+
+  let convertingGroupId: string | null = null;
+  let convertMessage = "";
+
+  // Replaces a bay group with an equivalent single-card PCIe group - useful
+  // after importing from the classic plugin, which has no PCIe-carrier
+  // concept and always imports every group as bays, even ones that are
+  // really M.2/U.2 carriers. Module ids are new (`${cardId}-m${i}`), so this
+  // persists immediately through App.svelte (like importClassic) rather than
+  // just editing the draft, since only App.svelte holds the live assignments
+  // that need remapping from the old bay ids to the new module ids in the
+  // same step - otherwise a save here would silently strand them.
+  async function onConvertToPcieClick(group: BayGroup) {
+    convertingGroupId = group.id;
+    convertMessage = "";
+    const cardId = `card-${crypto.randomUUID()}`;
+    const idRemap: Record<string, string> = {};
+    group.bays.forEach((bay, i) => (idRemap[bay.id] = `${cardId}-m${i}`));
+    const pcieGroup: PcieGroup = {
+      kind: "pcie",
+      id: group.id,
+      label: group.label,
+      cards: [{ id: cardId, carrierId: pcieCarriers[0]?.id ?? "default", label: group.label, moduleCount: group.bays.length }],
+    };
+    const result = await convertGroupToPcie(group.id, pcieGroup, idRemap);
+    if (result.ok) {
+      layout.groups = layout.groups.map((g) => (g.id === group.id ? pcieGroup : g));
+    } else {
+      convertMessage = `Error: ${result.error}`;
+    }
+    convertingGroupId = null;
   }
 
   function addCard(group: PcieGroup) {
@@ -181,6 +301,23 @@
     logos = { ...logos, [skinId]: url };
   }
 
+  let logoUploadMessage = "";
+
+  async function onLogoFileChange(skinId: string, e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    logoUploadMessage = "Uploading...";
+    const result = await uploadLogoFile("skin", skinId, file);
+    if (result.ok && result.url) {
+      setLogo(skinId, result.url);
+      logoUploadMessage = "";
+    } else {
+      logoUploadMessage = `Error: ${result.error}`;
+    }
+    input.value = "";
+  }
+
   function setLedColor(skinId: string, ledStatus: DriveStatus, color: string) {
     ledColors = { ...ledColors, [skinId]: { ...ledColors[skinId], [ledStatus]: color } };
   }
@@ -194,7 +331,7 @@
   async function onSaveClick() {
     status = "saving";
     errorMessage = "";
-    const result = await save(clone(layout), { ...logos }, clone(ledColors), smartHistoryDbPath.trim());
+    const result = await save(clone(layout), { ...logos }, clone(ledColors), smartHistoryDbPath.trim(), showRoleColor, showRoleIcon);
     if (result.ok) {
       status = "saved";
       setTimeout(() => {
@@ -208,6 +345,36 @@
 </script>
 
 <div class="settings">
+  <section class="settings-section">
+    <h3>Unraid API connection</h3>
+    <p class="hint">
+      This plugin is a standalone service that reads disk/array data from Unraid's own
+      <code>unraid-api</code> over GraphQL - it needs an API key with read access to disk/array
+      data. Generate one from Unraid's own Settings &gt; Management Access (or
+      <code>unraid-api apikey</code> on the command line).
+    </p>
+    <label class="db-path-row">
+      GraphQL URL
+      <input type="text" placeholder="https://localhost/graphql" bind:value={apiGraphqlUrl} />
+    </label>
+    <label class="db-path-row">
+      API key
+      <input
+        type="password"
+        placeholder={apiKeySet ? "•••••••• (set - leave blank to keep)" : "paste your unraid-api key"}
+        bind:value={apiKeyDraft}
+        autocomplete="off"
+      />
+    </label>
+    <div class="save-row">
+      <button type="button" on:click={onSaveApiSettingsClick} disabled={apiConnStatus === "saving"}>
+        {apiConnStatus === "saving" ? "Saving..." : "Save"}
+      </button>
+      {#if apiConnStatus === "saved"}<span class="ok">Saved</span>{/if}
+      {#if apiConnStatus === "error"}<span class="err">Error: {apiConnMessage}</span>{/if}
+    </div>
+  </section>
+
   {#if classicPreview?.available}
     <section class="settings-section">
       <h3>Import from classic plugin</h3>
@@ -219,6 +386,13 @@
           Skipped: {classicPreview.skippedGroups.map((g) => `${g.name} (${g.reason})`).join(", ")}.
         {/if}
       </p>
+      {#if classicPreview.outOfRange?.length}
+        <p class="hint err">
+          {classicPreview.outOfRange.length} assignment(s) referenced a tray number outside that
+          group's own grid size and were dropped as invalid:
+          {classicPreview.outOfRange.map((o) => `${o.groupName} tray ${o.tray}`).join(", ")}.
+        </p>
+      {/if}
       <p class="hint">Importing replaces your current chassis layout and disk assignments.</p>
       <div class="save-row">
         <button type="button" on:click={onImportClassicClick} disabled={classicImporting}>
@@ -231,10 +405,26 @@
 
   <section class="settings-section">
   <h3>Chassis layout</h3>
+  <div class="role-toggles">
+    <label class="checkbox-row">
+      <input type="checkbox" bind:checked={showRoleColor} />
+      Color-code bays by role (parity/data/cache/boot)
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" bind:checked={showRoleIcon} />
+      Icon badge for role (hover for pool name on cache disks)
+    </label>
+  </div>
+  {#if convertMessage}<p class="hint err">{convertMessage}</p>{/if}
   {#each layout.groups as group (group.id)}
     <div class="group-editor">
       <div class="group-header">
         <input type="text" bind:value={group.label} placeholder="Group label" />
+        {#if group.kind === "bays"}
+          <button type="button" on:click={() => onConvertToPcieClick(group)} disabled={convertingGroupId === group.id}>
+            {convertingGroupId === group.id ? "Converting..." : "Convert to PCIe group"}
+          </button>
+        {/if}
         <button type="button" class="remove" on:click={() => removeGroup(group.id)}>Remove group</button>
       </div>
 
@@ -276,8 +466,19 @@
               <option value="vertical">Vertical (2.5&quot;)</option>
             </select>
           </label>
+          <label>
+            Width (px)
+            <input
+              type="number"
+              min="200"
+              max="2000"
+              placeholder="Auto"
+              value={group.widthPx ?? ""}
+              on:change={(e) => setGroupWidth(group, e.currentTarget.value)}
+            />
+          </label>
         </div>
-        <p class="hint">{group.bays.length} bay(s). Skin/orientation apply to the whole group.</p>
+        <p class="hint">{group.bays.length} bay(s). Skin/orientation apply to the whole group. Width is optional - leave blank to fill the available space (the default); set it to make this group's bays render larger (or smaller) than that.</p>
       {:else}
         {#each group.cards as card (card.id)}
           <div class="fields card-row">
@@ -296,6 +497,16 @@
                   <option value={c.id}>{c.name}</option>
                 {/each}
               </select>
+            </label>
+            <label>
+              Width (px)
+              <input
+                type="number"
+                min="120"
+                max="900"
+                value={card.widthPx ?? DEFAULT_PCIE_CARD_WIDTH_PX}
+                on:change={(e) => (card.widthPx = +e.currentTarget.value)}
+              />
             </label>
             <button type="button" class="remove" on:click={() => removeCard(group, card.id)}>Remove</button>
           </div>
@@ -321,7 +532,11 @@
 
   <section class="settings-section">
     <h3>Manufacturer logos</h3>
-    <p class="hint">Hotlinked logo URL applied to every bay using that skin. Leave blank for none.</p>
+    <p class="hint">
+      Hotlinked logo URL applied to every bay using that skin, or upload your own SVG
+      instead (stored on this box, no hotlinking needed). Leave blank for none.
+    </p>
+    {#if logoUploadMessage}<p class="hint" class:err={logoUploadMessage.startsWith("Error")}>{logoUploadMessage}</p>{/if}
     {#each skins as s (s.id)}
       <label class="logo-row">
         <span>{s.name}</span>
@@ -331,6 +546,7 @@
           value={logos[s.id] ?? ""}
           on:change={(e) => setLogo(s.id, e.currentTarget.value)}
         />
+        <input type="file" accept=".svg,image/svg+xml" on:change={(e) => onLogoFileChange(s.id, e)} />
       </label>
     {/each}
     <div class="save-row">
@@ -395,6 +611,11 @@
         <button type="button" on:click={onStartDaemonClick} disabled={daemonActionInFlight}>
           {daemonActionInFlight ? "Working..." : daemonStatus.running ? "Restart daemon" : "Start daemon"}
         </button>
+        {#if daemonStatus.running}
+          <button type="button" on:click={onStopDaemonClick} disabled={daemonActionInFlight}>
+            {daemonActionInFlight ? "Working..." : "Stop daemon"}
+          </button>
+        {/if}
       </div>
       <label class="db-path-row">
         Port
@@ -521,6 +742,21 @@
     color: var(--muted);
     margin: 6px 0 0;
   }
+  .role-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .checkbox-row input {
+    width: auto;
+  }
   .add-group {
     display: flex;
     gap: 8px;
@@ -538,6 +774,8 @@
     max-width: 480px;
   }
   .daemon-row {
+    display: flex;
+    gap: 8px;
     margin: 4px 0;
   }
   .logo-row {
@@ -550,8 +788,12 @@
     width: 110px;
     flex: 0 0 auto;
   }
-  .logo-row input {
+  .logo-row input[type="url"] {
     flex: 1;
+  }
+  .logo-row input[type="file"] {
+    flex: 0 0 auto;
+    max-width: 160px;
   }
   .led-row {
     display: flex;

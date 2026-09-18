@@ -7,11 +7,10 @@
 # plugin daemons (see e.g. the netbird-unraid plugin for precedent).
 #
 # Runtime: Node.js + Single Executable Applications (SEA) - see ROADMAP.md.
-# start() below still runs the plain compiled JS via system Node (with
-# NODE_TLS_REJECT_UNAUTHORIZED=0 for unraid-api's self-signed cert) as a
-# placeholder; the SEA build step (turning src/ into a standalone binary with
-# no system Node.js dependency) isn't wired up yet, so this line will change
-# to exec that compiled binary directly once it is.
+# start() execs the compiled standalone binary directly - no system Node.js
+# dependency (Unraid doesn't bundle Node itself), no NODE_TLS_REJECT_UNAUTHORIZED
+# workaround needed either since nothing here depends on system Node's own
+# default trust-store handling.
 #
 # The port is read from layout.json via jq (already relied on elsewhere in
 # Unraid's own rc.nginx, not a new dependency) - user-configurable through
@@ -20,8 +19,7 @@
 
 PIDFILE="/var/run/unraid-disklocation-next.pid"
 LAYOUT_PATH="/boot/config/plugins/unraid-disklocation-next/layout.json"
-NODE_BIN="/usr/local/bin/node"
-APP_JS="/usr/local/emhttp/plugins/unraid-disklocation-next/app/dist/index.js"
+APP_BIN="/usr/local/emhttp/plugins/unraid-disklocation-next/app/bin/unraid-disklocation-next"
 LOGFILE="/var/log/unraid-disklocation-next.log"
 
 running() {
@@ -39,8 +37,7 @@ start() {
   local port
   port="$(jq -r '.port // 3838' "$LAYOUT_PATH" 2>/dev/null)"
   [[ "$port" =~ ^[0-9]+$ ]] || port=3838
-  local EXEC="/usr/bin/env NODE_TLS_REJECT_UNAUTHORIZED=0 PORT=$port $NODE_BIN $APP_JS"
-  nohup $EXEC >>"$LOGFILE" 2>&1 &
+  nohup /usr/bin/env PORT="$port" "$APP_BIN" >>"$LOGFILE" 2>&1 &
   local pid=$!
   echo "$pid" >"$PIDFILE"
   # A naive `echo $!` here can't tell a real start from one that immediately

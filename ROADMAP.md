@@ -465,23 +465,263 @@ data*.
   group were correctly dropped rather than silently mis-assigned. A browser harness
   confirmed the section stays invisible when unavailable and, when available, that
   confirming Import hands the exact previewed groups/assignments to the same
-  `persistAll()` every other save uses. **Not yet run against the real box's actual
-  classic-plugin data end-to-end** (next step) - the hash/position math were validated
-  against real data by hand, but the full preview-then-import flow through the live UI
-  hasn't been exercised yet.
+  `persistAll()` every other save uses.
+
+  **Run end-to-end against the real box and two real bugs found and fixed:**
+  1. `buildHashToSerialMap()` originally reused `smart-history.ts`'s `-n standby` flag
+     for the identity lookup too - wrong call for this specific use, since `-n standby`'s
+     whole point is to skip the query (returning bare device info only, no
+     model/serial) when the drive's asleep. On a real array that's mostly spun down,
+     this meant 0/13 real assignments ever matched. Fixed by switching to `-i`
+     (identify/inquiry only) with no `-n` flag - confirmed live this doesn't wake a
+     drive either (queried a real standby `/dev/sda` with `-i`, then immediately
+     re-checked its power state with `-n standby -j`: still reported standby,
+     unchanged), and it does return model/serial even while asleep, since IDENTIFY/
+     INQUIRY doesn't require the platters spinning.
+  2. Even after fixing (1), 2 of 13 real assignments still didn't match, both landing
+     one tray past their group's own declared `grid_rows x grid_columns`. Cross-
+     referencing the classic plugin's own live tray-map UI (which labels each bay with
+     its tray number) against `locations.json` on the real box proved `tray_start_num`
+     is **not** the first tray's own number - trays are 1-indexed *above* it
+     (`tray_start_num: "0"` means the first real tray is numbered 1, not 0; every real
+     group on this box had zero `tray: 0` entries, confirming the convention).
+     `gridPosition()`'s `i = tray - startNum` was off by one; fixed to
+     `i = tray - startNum - 1`. Once fixed, all 13/13 real assignments matched and
+     landed in the exact bay positions the classic plugin's own UI showed.
+
+  A tempting-but-wrong intermediate fix for (2) was tried first: expanding a group's
+  grid to fit any out-of-range tray, on the assumption the classic plugin's declared
+  grid size had simply undercounted a real physical group. Live-checked against the
+  user directly and both real out-of-range groups turned out to have the *correct*
+  declared size - the real bug was the off-by-one, not the grid dimensions. Kept as a
+  cautionary note: an out-of-range tray isn't automatically evidence the grid is wrong.
+
+- **Convert a bay group to a PCIe group, in place.** The classic-plugin importer has no
+  PCIe-carrier concept at all, so it always imports every group as bays - including ones
+  that are really M.2/U.2 carrier cards (confirmed live: a real imported "nvme" group
+  turned out to be 4 individual NVMe drives on a carrier, not hot-swap bays). Rather than
+  make the user redo that group by hand, `Settings.svelte`'s Chassis layout editor has a
+  "Convert to PCIe group" button on any bay group, building an equivalent single-card
+  `PcieGroup` (module count = the group's bay count, shell defaults to `pcieCarriers[0]`).
+  The tricky part: bay ids and PCIe module ids (`` `${cardId}-m${index}` ``) are different
+  addressing schemes, and `Settings.svelte` only edits a draft copy of the layout - it
+  doesn't own the live `Assignments` map those ids are keyed against. A first version that
+  just swapped the group in the draft left existing disk assignments silently stranded on
+  now-nonexistent bay ids (confirmed live - the drives showed up "assigned" to raw ids like
+  `classic-3-1` with no matching bay). Fixed by having `Settings.svelte` build the id
+  remap (it already knows the group's bays) but hand it to a new `convertGroupToPcie`
+  callback owned by `App.svelte`, which holds the real `liveAssignments` and persists the
+  remapped layout+assignments together, atomically - same division of responsibility as
+  `importClassic`.
+- **Three new PCIe carrier shells - ASUS-style, SuperMicro-style, HPE-style.** Same
+  unofficial/fan-styled-recreation convention as the vendor tray skins (no logos, a
+  `<id>.json` disclaimer sibling file, modeled on real quad-NVMe carrier products the user
+  linked - ASUS Hyper M.2, SuperMicro AOC-SHG3-4M2P, HPE Z Turbo Drive Quad Pro).
+  `pciecarriers.ts` gained the same optional-meta-json-with-disclaimer loading
+  `trayskins.ts` already had (previously unused since there was only the one unbranded
+  shell) plus a `CARRIER_ORDER` array so `default` sorts first.
+- **User-controlled sizing: PCIe card width, bay-group width, and the app shell's own max
+  width.** All three defaulted small enough to read as "broken" once real module rows/text
+  were on them - the PCIe card's hardcoded `220px` (now `DEFAULT_PCIE_CARD_WIDTH_PX = 380`,
+  editable per card), and a bay group's "fill available space" default turned out to still
+  be capped by `<main>`'s own `max-width: 720px` regardless of actual browser width (that
+  cap raised to `1400px`). A `BayGroup`/`PcieCardConfig` can now carry an optional
+  `widthPx` - unset keeps the old fluid-fill behavior for both; TrayMap's group panel gets
+  `overflow-x: auto` so an oversized group scrolls in place instead of breaking page layout.
+- **Drive types legend redesigned**: icon-above-description columns in one row (was a
+  plain bullet list) with a breakpoint under 480px falling back to a stacked icon-left
+  list, matching a direct ask for "icons, larger, one horizontal row, clean CSS for
+  smaller widths."
+- **Populated PCIe modules render as a small M.2 stick**, not an icon-in-a-circle: a gold
+  edge-connector notch flush against a dark PCB strip, a circular controller-chip badge
+  (drive-type icon - kept circular after an explicit correction; an intermediate version
+  used a rounded square), the label, a status LED, and a mounting-screw grommet.
+- **Every tab-panel/group/legend section now sits in its own bordered panel** (matching
+  the Settings tab's existing `.settings-section` look), applied to `TrayMap.svelte`'s
+  per-group sections and the Drive-types legend, per a direct ask to visually separate
+  them the same way Settings already does.
+- **Per-bay role (parity/data/cache/boot/unassigned), pool name, and accurate size -
+  built, from Unraid's own runtime state files, not unraid-api.** Two real API gaps drove
+  this, both confirmed by checking rather than assuming:
+  - `unraid-api`'s GraphQL schema (downloaded and grepped directly, since introspection is
+    disabled on a real box) has no per-disk pool-name field anywhere, and no dedicated
+    pools query - `array.caches` is one flat, undifferentiated bucket. A multi-pool setup
+    (this dev box has two: `nvcache` and `u2nvme`) can't be told apart through it.
+  - `Disk.size` (the flat `disks` query) is not reliable for display. It passes straight
+    through from the third-party `systeminformation` npm package's `diskLayout()`
+    (confirmed by reading `unraid-api`'s own `disks.service.ts` source), which returns
+    inconsistently-scaled values per drive type on this same real box: an 8TB SAS parity
+    drive came back as `size: 7` (matches TiB, not bytes) while ~1TB SATA/SSD drives came
+    back as e.g. `953` (matches GiB, not bytes) - two different wrong units from the one
+    field, simultaneously, on the same array. (Same category of unraid-api-field
+    unreliability already hit once this project with `isSpinning` on SAS drives.)
+
+  Fix for both: [src/array-state.ts](src/array-state.ts) reads
+  `/var/local/emhttp/disks.ini` and `devs.ini` directly - the same files, same general
+  approach the classic PHP plugin uses (confirmed by reading its `variables.php`), a
+  simple sectioned-INI format (`["sectionName"]` then `key="value"` lines). Verified
+  against the real files' actual content, not just the PHP source: `disks.ini`'s section
+  name is the pool/slot name, and a multi-disk pool gets one section per member with a
+  trailing digit (`nvcache`, `nvcache2`, `nvcache3`, `nvcache4` are all one real pool,
+  `nvcache` - confirmed against the real box's two actual multi-disk pools); `type` gives
+  the role (Parity/Data/Cache/Flash); `sectors x sector_size` gives an exact byte size,
+  verified to match `smartctl`'s own `user_capacity.bytes` for the same disk precisely
+  (`1953506646 x 4096 = 8,001,563,222,016`, the parity drive's real size). `devs.ini`
+  lists disks connected but in no array/pool at all (Unassigned Devices) - present there
+  and absent from `disks.ini` maps to role `"unassigned"`. `enrichWithArrayState()` joins
+  this onto whatever `getDisks()` returns before `/disks` responds, by bare device node
+  (`disk.device` always carries a `/dev/` prefix from unraid-api; disks.ini/devs.ini never
+  do).
+
+  Settings gained two independent toggles (deliberately independent, not one style
+  radio, per explicit direction) - "Color-code bays by role" (a colored ring around the
+  bay/a tinted PCIe module border) and "Icon badge for role" (a small P/D/C/B/U letter
+  badge, hover shows the full role - and for cache, the real pool name). Size is always
+  shown regardless of either toggle (same treatment as everything else that's just
+  informational, not a role judgment). The role badge originally sat top-right on its own
+  and covered every skin's status LED, which also lives top-right on all six skins
+  (checked every skin's `meta.json` overlay anchors before picking a new spot) - fixed by
+  grouping the badge with the size text into one `.corner-info` cluster at bottom-right,
+  clear of every skin's LED/logo anchors. `"unassigned"` intentionally has no role color
+  by default (a bay with no array/pool membership isn't really "in a role") but still
+  gets a "U" badge with a neutral, always-visible fill so it isn't silently invisible.
+- **Disk Assignment tab redesigned: one unified, ordered, zebra-striped list.** Previously
+  two disconnected sections - unassigned disks (full detail) and assigned bays (bare
+  `bayId -> serial`, no disk detail, and in `Object.entries()` insertion order, i.e.
+  whatever order things happened to get assigned in, not bay position). Now one list,
+  assigned rows first (each resolved to full disk detail when currently detected, or
+  flagged "Not currently detected" for a stale assignment rather than silently dropped),
+  sorted by each bay's actual position in the layout, then unassigned disks - with
+  alternating-row zebra striping and the same role-color left-border treatment as the
+  Tray Map (gated behind the same Settings toggle). Every assigned row also gets a Locate
+  button now, not just unassigned ones, so a user can blink-confirm an existing
+  assignment is correct, not only a new one. The "Assign to..." dropdown shows "Bay N"
+  (matching a plain sequential position, not row/column coordinates) - and every hover
+  tooltip across the Tray Map (bay, PCIe card, drive-type icon) was aligned to the same
+  "Group - Bay N" convention / a real drive-type name, replacing raw internal ids that
+  used to leak into the UI as tooltip text.
+
+- **Drive-brand logos, separated from tray-skin logos, plus a new "Drive Identity" tab.**
+  The existing `LogoConfig` (Settings tab, "Manufacturer logos") is keyed by tray-skin id -
+  every bay using the Dell skin gets the same logo, which conflates "what caddy/tray this
+  is" with "what drive is in it" (a Dell skin doesn't mean a Dell drive). Per explicit
+  direction, this is now a separate, drive-brand-keyed system that takes priority, with the
+  skin logo kept as the fallback: `resolveBayLogo()` in
+  [brand.ts](src/frontend/lib/brand.ts) checks, in order, (1) a manual per-bay brand
+  override, (2) the drive's auto-detected brand (from `disk.vendor`/`disk.name` - regex
+  patterns checked against real strings seen this session: HITACHI/HGST SAS drives, SPCC
+  SATA/NVMe SSDs, Micron NVMe, Seagate SAS, plus other common brands), (3) the bay's tray
+  skin's own `LogoConfig` entry. `BayDrive` gained `vendor`/`model` fields (`derive-drive.ts`)
+  purely to carry the raw strings brand detection needs, kept separate from `label`
+  (serial-first).
+
+  New `StoredLayout` fields: `brandLogos` (brand id -> logo URL, its own hotlinked-URL
+  table, same convention as skin logos) and `manufacturerOverrides` (bay id -> brand id,
+  the manual per-bay override). A new fifth tab, "Drive Identity"
+  ([DriveIdentity.svelte](src/frontend/lib/DriveIdentity.svelte), between Disk Assignment
+  and SMART History), has the brand-logo URL table plus a per-assigned-bay row showing the
+  auto-detected brand and a dropdown to override it - auto-detection is explicitly
+  best-effort (rebadged/OEM drives, generic "ATA" vendor strings with no real brand info),
+  which is the entire reason the override exists rather than trusting it blindly.
+
+- **Local-asset (user-uploaded SVG) logos, for both skin and drive-brand logos.** A
+  hotlinked URL only works for a publicly reachable image - per explicit direction, a
+  user should be able to supply their own SVG file directly instead.
+  [src/logos.ts](src/logos.ts) stores an uploaded SVG under
+  `/boot/config/plugins/unraid-disklocation-next/logos/<kind>-<id>.svg` (`kind` is
+  `"skin"` or `"brand"`, `id` is always a value from a fixed, known set - a tray-skin id
+  or a `brand.ts` `KNOWN_BRANDS` id, never free-text from the client - so the resulting
+  filename can never be a path-traversal vector even though it's built from client input;
+  verified directly: a `saveLogo("skin", "../etc", ...)` call throws rather than writing
+  outside the logos directory). `POST /logos` validates the content actually starts with
+  `<svg`/`<?xml` and is under 256KB, then returns a served path; `GET /logos/:filename`
+  serves it back with an `image/svg+xml` content-type. [logo-upload.ts](src/frontend/lib/logo-upload.ts)
+  is the shared frontend helper - both Settings.svelte's "Manufacturer logos" section and
+  DriveIdentity.svelte's "Brand logos" section got a file-picker next to the existing URL
+  input; picking a file uploads it and fills the URL field with the served path, which is
+  then used exactly like any hotlinked URL from that point on - no separate "local asset"
+  concept anywhere downstream of the upload itself.
 
 ## Open questions (not yet decided)
 
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
-- **The `.plg` install script is still a scaffold** (`plugin/unraid-disklocation-next.plg`
-  literally just echoes "scaffold only, install script not yet implemented" and exits 1) -
-  everything built this session has been deployed by hand over SSH. This is the next big
-  piece: a real install/upgrade/uninstall flow (SEA-binary build still pending too, see the
-  runtime-packaging decision above). **When this gets built, also add a Community Apps feed
-  entry** - a plugin XML in [joshmans/unraid-tools](https://github.com/joshmans/unraid-tools)
-  - so the plugin is actually discoverable/installable from Unraid's Community Applications,
-  not just a manual `.plg` URL paste.
+- **Community Apps feed entry** - a plugin XML in
+  [joshmans/unraid-tools](https://github.com/joshmans/unraid-tools), so the plugin is
+  discoverable/installable from Unraid's Community Applications, not just a manual `.plg` URL
+  paste. Deliberately deferred until a real tagged release (see below) has actually been
+  installed and verified on a live box.
+
+## Settled decisions (continued)
+
+- **Real `.plg` installer + Node SEA binary packaging + release pipeline - built.** Previously
+  the `.plg` was a literal stub (`echo "scaffold only"; exit 1`) and the daemon had only ever
+  run as `node dist/index.js` over manual SSH. Researched against real, currently-published
+  Unraid plugins read in full from local clones (not invented): `Unraid-HBAviewer` and
+  `unraid-docker-folders` both confirmed the modern convention - Unraid's own plugin engine
+  downloads/hash-verifies/installs a Slackware `.txz` via
+  `<FILE Name="..." Run="upgradepkg --install-new"><URL>...</URL><MD5>...</MD5></FILE>`, then a
+  plain `<FILE Run="/bin/bash"><INLINE>` block does post-install config seeding/service start,
+  and `Method="remove"` does `removepkg` + manual cleanup while explicitly leaving
+  `/boot/config/plugins/<name>` (user config/data) alone - the old sibling PHP plugin's own
+  `.plg` uses a different, older live-branch-zip convention that doesn't fit a supervised daemon
+  binary, so it wasn't used as the model here. **Uses `<SHA256>` instead of the `<MD5>` those two
+  precedents actually had**, confirmed via a live web search that Unraid's plugin engine supports
+  it as a real, currently-preferred alternative - Unraid's own Community Apps review bot is
+  actively retrofitting `<SHA256>` onto other plugins that still only declare `<MD5>` (e.g.
+  [kaedinger/unspin#7](https://github.com/kaedinger/unspin/pull/7)), so starting there avoids the
+  same change again later for CA compliance.
+  - **A real, subtle bug caught before shipping**: XML `CDATA` sections do not expand entity
+    references (`&name;` etc.) - that's the entire point of CDATA, literal text with no markup
+    recognition at all. An earlier draft of the install/remove scripts mixed `<![CDATA[...]]>`
+    wrapping with `&name;`/`&pluginLOC;`/etc. inside it, which would have shipped every path as
+    the literal text `&name;` rather than the real value. Fixed by hardcoding plain bash
+    variables (`NAME=`, `PLUGIN_LOC=`, etc.) at the top of each CDATA'd script instead - entity
+    substitution stays working everywhere else in the file (attributes, `<URL>`/`<SHA256>`,
+    `<CHANGES>`), just not inside CDATA. Caught by actually parsing the file with an XML parser
+    and running `bash -n` against the extracted script bodies, not just by inspection.
+  - **SEA packaging verified end-to-end locally**, not just wired up on faith:
+    `npm run build:bundle` (new `esbuild` step - SEA only embeds the entry script's own source,
+    so every sibling `dist/*.js` module has to be bundled into one file first) was smoke-tested
+    by actually running the resulting `dist/bundle.cjs` as a plain script - it booted the HTTP
+    server, served `/disks` (a handled 400 with no `unraid-api` configured, not a crash), and the
+    SMART-history poller's `node:sqlite` usage fired without error. The actual
+    `--experimental-sea-config`/`postject` injection recipe was also verified for real: this dev
+    machine's Homebrew-built Node has SEA compiled out entirely (`process.config.variables.
+    node_enable_experimentals: false`, confirmed by inspecting `process.config`), which isn't a
+    problem with the approach - downloading the official nodejs.org release build (the same kind
+    `actions/setup-node` installs in CI) and running the full recipe against it produced a real,
+    standalone, runnable binary (code-signed ad hoc for this local macOS test only; the real
+    Linux CI build needs no such step).
+  - **Build/release pipeline**: new `build/build.sh` (adapted from `unraid-docker-folders`'s own
+    script, a real currently-published plugin's actual release tooling) computes a date-stamped
+    version, runs the full build chain, stages the Slackware filesystem tree, tars it, computes a
+    SHA256, and - in `--release` mode only - `sed`/Python-edits the `.plg`'s version/SHA256
+    entities and `<CHANGES>`, tags, and `gh release create`/`upload`s the `.txz`. New
+    `.github/workflows/release.yml` runs this on `ubuntu-latest` (must be Linux x86_64 - the SEA
+    binary embeds a copy of whatever `node` builds it, so a macOS/Windows runner would ship a
+    binary that can't run on the target Unraid host), pinned to Node 22.x LTS.
+  - `plugin/rc.d/rc.unraid-disklocation-next` now execs the compiled binary directly (no system
+    Node dependency, no `NODE_TLS_REJECT_UNAUTHORIZED` workaround needed either) instead of the
+    placeholder `node dist/index.js` invocation.
+  - The `.plg`'s post-install script installs the rc.d script at `/usr/local/etc/rc.d/` -
+    matching `daemon-control.php`'s own `$RC_SCRIPT` path (the one the Settings tab's
+    Start/Stop/Restart buttons already exercise successfully), not the ad hoc `/etc/rc.d/...`
+    path this session's manual dev-restart commands used as a convenience.
+- **Real README.md - built.** Replaced the 17-line status blurb with actual user-facing
+  documentation: features, requirements (Unraid 7.2+, an `unraid-api` key), install instructions
+  (manual `.plg` URL paste today), a tab-by-tab usage tour, and a contributing pointer.
+- **Settings-tab field for the `unraid-api` key/GraphQL URL - built.** Writing the README's
+  install instructions surfaced that `src/config.ts`'s `settings.json` (`apiKey`/`graphqlUrl`)
+  had no UI at all - every other setting in this project has one, this didn't. New `GET`/`POST
+  /settings` routes in [server.ts](src/server.ts): `GET` never round-trips the saved key back to
+  the browser (returns `apiKeySet: boolean` instead, same convention a normal secret-field UI
+  uses), and `POST` keeps the existing key when the field is left blank, so updating just the
+  GraphQL URL doesn't require re-pasting it. A new "Unraid API connection" section at the top of
+  the Settings tab edits both. Confirmed `loadSettings()` is called fresh on every use site
+  (`/disks`, `smart-history.ts`'s poll loop, `classic-import.ts`) rather than cached at daemon
+  startup - a saved change takes effect on the very next request, no restart needed, unlike the
+  daemon's listening port (which genuinely is read once at process start).
 
 ## Conventions carried forward
 

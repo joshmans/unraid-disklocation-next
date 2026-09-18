@@ -5,6 +5,7 @@ export type {
   Orientation,
   DriveType,
   DriveStatus,
+  DriveRole,
   BayDrive,
   BayConfig,
   BayGroup,
@@ -16,7 +17,10 @@ export type {
   Assignments,
   LedColorConfig,
   StoredLayout,
+  BrandLogoConfig,
+  ManufacturerOverrides,
 } from "../../shared/chassis-types.js";
+export { DEFAULT_PCIE_CARD_WIDTH_PX } from "../../shared/chassis-types.js";
 
 import type { BayConfig, BayDrive, ChassisLayout } from "../../shared/chassis-types.js";
 

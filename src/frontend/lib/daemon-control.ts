@@ -60,6 +60,15 @@ export async function startDaemon(): Promise<DaemonActionResult> {
   }
 }
 
+export async function stopDaemon(): Promise<DaemonActionResult> {
+  try {
+    const result = await call("stop");
+    return { ok: !!result.success, message: result.message };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function setDaemonPort(port: number): Promise<DaemonActionResult> {
   try {
     const result = await call("set-port", { port: String(port) });

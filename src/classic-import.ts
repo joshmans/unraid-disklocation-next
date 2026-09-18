@@ -43,6 +43,13 @@ export interface ImportPreview {
   matchedCount?: number;
   totalLocations?: number;
   skippedGroups?: { name: string; reason: string }[];
+  // Locations whose tray index falls outside their group's own declared
+  // grid_rows x grid_columns - confirmed live to be stale/invalid entries in
+  // the classic plugin's own locations.json (its declared grid size was the
+  // real physical enclosure size in both real cases seen), not evidence the
+  // real cage is bigger - so these are reported and dropped, never used to
+  // grow the imported grid.
+  outOfRange?: { groupName: string; tray: number }[];
 }
 
 /**
@@ -52,6 +59,18 @@ export interface ImportPreview {
  * this mode. Other modes are more involved reversed/bottom-up numbering
  * schemes not verified against real data, so a group using one is skipped
  * and reported rather than guessed at.
+ *
+ * tray_start_num is NOT the first tray's own number - trays are 1-indexed
+ * starting just above it (tray_start_num "0" means the first real tray is
+ * numbered 1, not 0). Confirmed by cross-referencing the classic plugin's
+ * own live UI (which labels each bay with its tray number) against
+ * locations.json on a real box: every assignment's UI-displayed bay label
+ * was exactly its locations.json tray value minus 1 (tray 1 -> labeled "0",
+ * tray 12 -> labeled "11", etc, with no tray-0 entries ever present).
+ * Getting this wrong doesn't error - it just silently shifts every disk to
+ * an adjacent bay and makes the last real tray look "out of range" for its
+ * own declared grid, which is what real imported data on this box showed
+ * before this was caught.
  */
 function gridPosition(
   tray: number,
@@ -60,7 +79,7 @@ function gridPosition(
   gridCount: "row" | "column",
   startNum: number,
 ): { row: number; col: number } {
-  const i = tray - startNum;
+  const i = tray - startNum - 1;
   if (gridCount === "column") {
     return { col: Math.floor(i / rows), row: i % rows };
   }
@@ -75,8 +94,9 @@ function buildImportedGroup(
   const columns = Number(classic.grid_columns);
   const startNum = Number(classic.tray_start_num);
   const orientation: Orientation = classic.disk_tray_direction === "v" ? "vertical" : "horizontal";
+
   const bays: BayConfig[] = [];
-  for (let tray = startNum; tray < startNum + rows * columns; tray++) {
+  for (let tray = startNum + 1; tray <= startNum + rows * columns; tray++) {
     const { row, col } = gridPosition(tray, rows, columns, classic.grid_count, startNum);
     bays.push({ id: `classic-${id}-${tray}`, row, col, skinId: "classic", orientation });
   }
@@ -101,9 +121,14 @@ async function buildHashToSerialMap(): Promise<Map<string, string>> {
   for (const disk of disks) {
     try {
       const device = normalizeDevice(disk.device);
-      // -n standby: a one-time import is no more entitled to wake a
-      // sleeping drive than the background SMART poller is.
-      const stdout = await runSmartctl(["-n", "standby", "-j", device]);
+      // -i (identify/inquiry only), not -n standby: -n standby's power-mode
+      // check exits before returning model/serial at all when the drive is
+      // asleep (confirmed live - every spun-down disk silently produced no
+      // hash, hence 0/13 matches on a real array with mostly standby disks).
+      // -i alone is safe - confirmed live too: querying a standby /dev/sda
+      // with -i left it reporting standby immediately afterward, so it
+      // doesn't wake the drive either.
+      const stdout = await runSmartctl(["-i", "-j", device]);
       const parsed = JSON.parse(stdout);
       const modelName: string | undefined = parsed.scsi_model_name ?? parsed.model_name;
       const serialNumber: string | undefined = parsed.serial_number;
@@ -141,6 +166,7 @@ export async function previewImport(): Promise<ImportPreview> {
   const hashToSerial = await buildHashToSerialMap();
 
   const assignments: Assignments = {};
+  const outOfRange: { groupName: string; tray: number }[] = [];
   let matchedCount = 0;
   const totalLocations = Object.keys(classicLocations).length;
   for (const [hash, location] of Object.entries(classicLocations)) {
@@ -152,10 +178,13 @@ export async function previewImport(): Promise<ImportPreview> {
     const gridCount = classicGroups[location.groupid].grid_count;
     const { row, col } = gridPosition(location.tray, rows, group.columns, gridCount, startNum);
     const bay = group.bays.find((b) => b.row === row && b.col === col);
-    if (!bay) continue;
+    if (!bay) {
+      outOfRange.push({ groupName: classicGroups[location.groupid].group_name, tray: location.tray });
+      continue;
+    }
     assignments[bay.id] = serial;
     matchedCount++;
   }
 
-  return { available: true, groups, assignments, matchedCount, totalLocations, skippedGroups };
+  return { available: true, groups, assignments, matchedCount, totalLocations, skippedGroups, outOfRange };
 }

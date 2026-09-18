@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "**.md"
+      - "ROADMAP.md"
+  workflow_dispatch: {}
+
+jobs:
+  release:
+    # Must be a Linux x86_64 runner: the Node SEA binary embeds a copy of
+    # whatever `node` builds it, and the target is Unraid's Linux x86_64
+    # host - a macOS/Windows runner would produce a binary that can't run
+    # there. See build/build.sh's own header comment.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # Pinned to the 22.x LTS line - matches the already-settled
+          # `engines: >=22.5` floor (node:sqlite needs 22.5+) without
+          # chasing a bleeding-edge major for something shipped as a binary.
+          node-version: "22"
+
+      - name: Configure git identity for the release commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - run: npm ci
+
+      - name: Build and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./build/build.sh --release

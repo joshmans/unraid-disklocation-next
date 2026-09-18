@@ -62,6 +62,15 @@ if ($action === 'start') {
     exit;
 }
 
+if ($action === 'stop') {
+    exec(escapeshellarg($RC_SCRIPT) . ' stop 2>&1', $output, $code);
+    echo json_encode([
+        'success' => $code === 0,
+        'message' => implode("\n", $output),
+    ]);
+    exit;
+}
+
 if ($action === 'set-port') {
     if (dln_is_running($PIDFILE)) {
         echo json_encode(['success' => false, 'message' => 'Stop the daemon before changing its port']);

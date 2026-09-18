@@ -34,5 +34,10 @@ export function driveFromDisk(disk: DiskResult, historyStatus?: DriveStatus): Ba
     driveType: inferDriveType(disk),
     status: worseStatus(smartStatusBased, historyStatus ?? "ok"),
     label: disk.serialNum || disk.name,
+    role: disk.role,
+    poolName: disk.poolName,
+    sizeBytes: disk.sizeBytes,
+    vendor: disk.vendor,
+    model: disk.name,
   };
 }

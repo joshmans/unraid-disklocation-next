@@ -12,7 +12,9 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "build:frontend": "vite build",
-    "dev:frontend": "vite"
+    "dev:frontend": "vite",
+    "build:bundle": "esbuild dist/index.js --bundle --platform=node --format=cjs --external:node:sqlite --outfile=dist/bundle.cjs",
+    "build:sea": "node --experimental-sea-config=sea-config.json && node -e \"require('fs').copyFileSync(process.execPath, 'dist/unraid-disklocation-next'); require('fs').chmodSync('dist/unraid-disklocation-next', 0o755)\" && npx postject dist/unraid-disklocation-next NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
@@ -21,6 +23,13 @@
     "vite": "^5.4.0",
     "svelte": "^4.2.0",
     "@sveltejs/vite-plugin-svelte": "^3.1.0",
-    "uplot": "^1.6.0"
+    "uplot": "^1.6.0",
+    "esbuild": "^0.24.0",
+    "postject": "^1.0.0-alpha.6"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true
   }
 }
