@@ -5,19 +5,20 @@
   import DiskAssignment from "./lib/DiskAssignment.svelte";
   import SmartHistory from "./lib/SmartHistory.svelte";
   import { driveIconMeta } from "./lib/driveicons";
-  import { exampleLayout, exampleDrives, exampleLogos, exampleLedColors, emptyLayout } from "./lib/chassis";
+  import { exampleDrives, emptyLayout } from "./lib/chassis";
   import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive, DriveStatus } from "./lib/chassis";
   import type { DiskResult } from "../graphql/queries";
   import { driveFromDisk } from "../shared/derive-drive";
+  import { startDaemon as phpStartDaemon } from "./lib/daemon-control";
 
   const API_BASE = "/plugins/unraid-disklocation-next/api";
 
   type Tab = "map" | "assign" | "settings" | "history";
   let activeTab: Tab = "map";
 
-  let liveLayout: ChassisLayout = exampleLayout;
-  let liveLogos: LogoConfig = exampleLogos;
-  let liveLedColors: LedColorConfig = exampleLedColors;
+  let liveLayout: ChassisLayout = emptyLayout;
+  let liveLogos: LogoConfig = {};
+  let liveLedColors: LedColorConfig = {};
   let liveAssignments: Assignments = {};
   let liveSmartHistoryDbPath = "";
   let disks: DiskResult[] | null = null;
@@ -33,11 +34,17 @@
   // under the hood) - the layout/settings/tray-map structure shouldn't sit
   // blocked behind that.
   let layoutLoaded = false;
-  // True once we've confirmed the daemon is reachable AND has no saved
-  // layout yet (a real, unconfigured production install) - as opposed to
-  // the daemon/proxy being unreachable (local dev without it in front),
-  // where falling back to the bundled demo layout is still the right call.
+  // True once we've confirmed the daemon is reachable and has no saved
+  // layout yet (a real, unconfigured production install).
   let productionEmpty = false;
+  // False when /layout couldn't be reached at all (network error, or nginx
+  // returning a non-ok status because nothing's listening upstream) - shows
+  // a "start the daemon" panel instead of ever quietly falling back to
+  // demo data, which used to happen here and was actively misleading (a
+  // real down daemon looked identical to a normal, working install).
+  let daemonReachable = true;
+  let startingDaemon = false;
+  let startDaemonMessage = "";
   // Guards loadDisks so it only ever fires once. Used to also require at
   // least one bay/PCIe group to exist first (nothing to assign otherwise),
   // but the SMART History tab needs disks/history regardless of whether a
@@ -58,6 +65,7 @@
     try {
       const res = await fetch(`${API_BASE}/layout`);
       if (res.ok) {
+        daemonReachable = true;
         const stored = await res.json();
         if (stored) {
           liveLayout = stored.layout;
@@ -71,11 +79,27 @@
           liveLogos = {};
           liveLedColors = {};
         }
+      } else {
+        daemonReachable = false;
       }
     } catch {
-      // Daemon/proxy not reachable (e.g. local dev) - fall back to the demo layout.
+      daemonReachable = false;
     }
     layoutLoaded = true;
+  }
+
+  async function handleStartDaemon() {
+    startingDaemon = true;
+    startDaemonMessage = "";
+    const result = await phpStartDaemon();
+    startDaemonMessage = result.message ?? (result.ok ? "Started" : "Failed to start");
+    startingDaemon = false;
+    if (result.ok) {
+      // Give it a moment to actually come up and start listening before
+      // retrying - matches the ~1s the rc.d script itself waits before
+      // reporting success.
+      setTimeout(loadLayout, 1500);
+    }
   }
 
   async function loadDisks() {
@@ -188,7 +212,13 @@
        toggles visibility, so nothing re-fetches or re-initializes on every
        switch back to a tab you already visited. -->
   <section class="tab-panel" class:hidden={activeTab !== "map"}>
-    {#if layoutLoaded}
+    {#if !daemonReachable}
+      <p class="status err">The plugin's service isn't running.</p>
+      <button type="button" on:click={handleStartDaemon} disabled={startingDaemon}>
+        {startingDaemon ? "Starting..." : "Start daemon"}
+      </button>
+      {#if startDaemonMessage}<p class="status">{startDaemonMessage}</p>{/if}
+    {:else if layoutLoaded}
       {#if productionEmpty}
         <p class="status">To begin, go to the Settings tab and define at least one tray group.</p>
       {:else}
@@ -295,8 +325,21 @@
     color: var(--muted);
     margin-top: 0;
   }
+  .status.err {
+    color: var(--accent-critical);
+  }
   .legend {
     font-size: 13px;
     padding-left: 18px;
+  }
+  main button {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
   }
 </style>

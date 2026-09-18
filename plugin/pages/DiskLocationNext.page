@@ -6,8 +6,18 @@ Title="Disk Location Next"
 // Thin shell only, deliberately no PHP logic beyond this - the real UI is
 // the bundled JS below, mounted directly into this DOM node. No iframe: the
 // script runs in this page's own document, and its API calls go through the
-// same-origin nginx proxy (see plugin/nginx/unraid-disklocation-next.conf),
+// same-origin nginx proxy (registered by src/nginx.ts at daemon startup),
 // not directly to the Node daemon's port.
+//
+// $var['csrf_token'] is Unraid's own current CSRF token, available to any
+// .page's embedded PHP - exposed here the same way unraid-zram-card's own
+// .page does it (confirmed against that real, installed plugin rather than
+// guessed), so daemon-control.php can validate it. That endpoint is how the
+// frontend starts/restarts the daemon and changes its port from the UI even
+// when the Node daemon itself is down - our own API can't help with that,
+// since it's exactly what's unreachable in that case.
+$csrf = $var['csrf_token'] ?? '';
 ?>
+<script>window.DISKLOCATION_NEXT_PAGE = {CSRF: '<?= addslashes($csrf) ?>', API: '/plugins/unraid-disklocation-next/daemon-control.php'};</script>
 <div id="unraid-disklocation-next-app"></div>
 <script src="/plugins/unraid-disklocation-next/app/dist/frontend.js"></script>

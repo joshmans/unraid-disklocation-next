@@ -359,6 +359,63 @@ data*.
   and the container gets laid out for real. Verified in a browser harness: charts
   rendered correctly from mocked history data on first visit to the tab, and survived
   being hidden (switching to another tab) and shown again without going blank.
+- **Daemon-down UX: no demo-data fallback, start/restart controls, configurable port.**
+  Previously, when `/layout` was unreachable, `App.svelte` silently rendered bundled demo
+  data - convenient for local dev, but on a real install this made a genuinely down
+  daemon (confirmed live: the rc.d restart race from the bullet above did exactly this)
+  indistinguishable from a working one. Now `loadLayout()`'s failure path (including a
+  non-ok HTTP status, e.g. nginx 502 with nothing listening upstream - not just a thrown
+  exception) sets `daemonReachable = false`, and the Tray Map tab shows a plain "The
+  plugin's service isn't running" message with a real Start button instead.
+
+  The hard part: **when the daemon is down, this plugin's own API is exactly what's
+  unreachable**, so starting it - and changing its port, needed so it doesn't collide
+  with a Docker container or other service - can't go through
+  `/plugins/unraid-disklocation-next/api/*` at all. This goes through Unraid's own
+  always-running PHP/nginx layer instead, using the real, verified convention for it
+  (confirmed by reading an already-installed plugin, `unraid-zram-card`, not invented):
+  its `.page` file exposes Unraid's own CSRF token (`$var['csrf_token']`, available to
+  any `.page`'s embedded PHP) via an inline `window.ZRAM_PAGE = {CSRF: '...', API:
+  '...'}` script tag, and its standalone action-handler `.php` file (dropped directly in
+  the plugin's `emhttp` directory, not routed through `template.php`'s page-auth
+  pipeline) validates that token server-side with `hash_equals()` against
+  `/var/local/emhttp/var.ini`'s current token - failing closed if that file can't be
+  read. [plugin/daemon-control.php](plugin/daemon-control.php) copies this exactly, and
+  [plugin/pages/DiskLocationNext.page](plugin/pages/DiskLocationNext.page) exposes
+  `window.DISKLOCATION_NEXT_PAGE = {CSRF, API}` the same way. Three actions: `status`
+  (reads `port` straight out of `layout.json`, default 3838 - checks "is it running" via
+  `file_exists("/proc/$pid")` on the rc.d pidfile, a zero-extension-dependency
+  equivalent of `kill -0` that doesn't need PHP's `posix` extension), `start` (always
+  runs the rc.d script's `restart`, never plain `start` - its `start()` already no-ops
+  cleanly if already running, so one action covers both cases the UI needs), and
+  `set-port` (validated 1-65535, refuses server-side too if currently running - defense
+  in depth beyond the UI merely disabling the input, in case of a stale page or two tabs
+  open; read-modify-writes just the `port` key into `layout.json`, seeding a minimal
+  valid `{layout, logos}` structure first if the file doesn't exist yet, matching
+  `chassis.ts`'s own `emptyLayout` shape, so the frontend never has to handle a document
+  missing those keys).
+
+  `plugin/rc.d/rc.unraid-disklocation-next`'s `start()` now reads the configured port via
+  `jq` (already relied on elsewhere in Unraid's own `rc.nginx`, not a new dependency)
+  before building its `EXEC` line, defaulting to 3838 if unset/unreadable - matches the
+  "only changeable while stopped" rule by construction, since it's only ever read at
+  startup, never hot-reloaded into a running process.
+
+  The `src/frontend/lib/daemon-control.ts` wrapper degrades safely (returns a clear
+  "not available" result rather than throwing) when `window.DISKLOCATION_NEXT_PAGE` is
+  absent - true of every browser-harness/local-dev setup used throughout this session,
+  none of which serve through Unraid's real `.page` pipeline.
+
+  Verified in a browser harness (mocked `fetch` + a mocked `window.DISKLOCATION_NEXT_PAGE`):
+  a daemon-down scenario shows the real message and Start button (not demo data),
+  clicking Start calls the mocked PHP endpoint and displays its response; a
+  daemon-running scenario shows "Restart daemon" (not "Start") and the port field/Save
+  button both visibly disabled; `php -l` confirms both PHP files parse cleanly and `jq`
+  confirms the port-extraction expression behaves correctly with and without a saved
+  `port` key. **Not yet verified against the real box** (next step) - in particular, the
+  actual `$var['csrf_token']`/`var.ini` mechanics, and PHP's `posix`-free `/proc/$pid`
+  check, are confirmed patterns from reading `unraid-zram-card`'s real files, not yet
+  exercised end-to-end against this plugin's own installed copy.
 
 ## Open questions (not yet decided)
 

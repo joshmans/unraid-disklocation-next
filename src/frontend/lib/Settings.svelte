@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import type { ChassisLayout, BayGroup, PcieGroup, BayConfig, LogoConfig, LedColorConfig, DriveStatus, Orientation } from "./chassis";
   import { skins } from "./trayskins";
   import { pcieCarriers } from "./pciecarriers";
   import { resolveLedColor } from "./status";
+  import { getDaemonStatus, startDaemon, setDaemonPort, type DaemonStatus } from "./daemon-control";
 
   // App.svelte owns the fetch/persist and the assignments this layout's bay
   // ids get joined against elsewhere, so it stays the single source of truth
@@ -32,6 +34,41 @@
   let smartHistoryDbPath = initialSmartHistoryDbPath;
   let status: "idle" | "saving" | "saved" | "error" = "idle";
   let errorMessage = "";
+
+  let daemonStatus: DaemonStatus | null = null;
+  let daemonActionInFlight = false;
+  let daemonMessage = "";
+  let portDraft = "";
+
+  async function refreshDaemonStatus() {
+    daemonStatus = await getDaemonStatus();
+    if (daemonStatus) portDraft = String(daemonStatus.port);
+  }
+
+  onMount(refreshDaemonStatus);
+
+  async function onStartDaemonClick() {
+    daemonActionInFlight = true;
+    daemonMessage = "";
+    const result = await startDaemon();
+    daemonMessage = result.message ?? (result.ok ? "Started" : "Failed to start");
+    daemonActionInFlight = false;
+    setTimeout(refreshDaemonStatus, 1500);
+  }
+
+  async function onSavePortClick() {
+    const port = parseInt(portDraft, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      daemonMessage = "Port must be an integer between 1 and 65535";
+      return;
+    }
+    daemonActionInFlight = true;
+    daemonMessage = "";
+    const result = await setDaemonPort(port);
+    daemonMessage = result.message ?? (result.ok ? "Saved" : "Failed to save");
+    daemonActionInFlight = false;
+    refreshDaemonStatus();
+  }
 
   const LED_STATUSES: DriveStatus[] = ["ok", "warn", "critical"];
   const LED_STATUS_LABELS: Record<DriveStatus, string> = { ok: "OK", warn: "Warn", critical: "Critical" };
@@ -257,6 +294,33 @@
     </div>
   {/each}
 
+  <h3>Daemon</h3>
+  {#if daemonStatus === null}
+    <p class="hint">Checking daemon status...</p>
+  {:else}
+    <p class="hint">
+      Status: {daemonStatus.running ? `Running on port ${daemonStatus.port}` : `Not running (configured port: ${daemonStatus.port})`}
+    </p>
+    <div class="daemon-row">
+      <button type="button" on:click={onStartDaemonClick} disabled={daemonActionInFlight}>
+        {daemonActionInFlight ? "Working..." : daemonStatus.running ? "Restart daemon" : "Start daemon"}
+      </button>
+    </div>
+    <label class="db-path-row">
+      Port
+      <input type="number" min="1" max="65535" bind:value={portDraft} disabled={daemonStatus.running} />
+    </label>
+    <button type="button" on:click={onSavePortClick} disabled={daemonStatus.running || daemonActionInFlight}>
+      Save port
+    </button>
+    <p class="hint">
+      Only changeable while the daemon isn't running, so a Docker container or another
+      service can't collide with whatever it's currently bound to. Takes effect the next
+      time it starts.
+    </p>
+  {/if}
+  {#if daemonMessage}<p class="hint">{daemonMessage}</p>{/if}
+
   <h3>Storage</h3>
   <label class="db-path-row">
     SMART history database path
@@ -362,6 +426,9 @@
     gap: 4px;
     margin: 4px 0 0;
     max-width: 480px;
+  }
+  .daemon-row {
+    margin: 4px 0;
   }
   .logo-row {
     display: flex;
