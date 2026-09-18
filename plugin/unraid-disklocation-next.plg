@@ -7,7 +7,7 @@
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "0000000000000000000000000000000000000000000000000000000000000000">
+<!ENTITY sha256     "054a616f0ef8b4f6a71cfd46e696b6535fcf9c4315ec93e63fef91536c7f40d0">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,42 @@
 -->
 
 <CHANGES>
+###2026.09.18
+ - Add PCIe conversion, role/pool/size display, brand logos, and a real .plg/SEA install pipeline
+ - Add importer for tray assignments from the classic Disk Location plugin
+ - Rename Storage section's save button to Save Location
+ - Rename each Settings save button to reflect its own section
+ - Add a Save button to the LED colors section too
+ - Add per-section Save buttons in Settings, reorder skins list
+ - Color-code daemon status and visually separate Settings sections
+ - Replace demo-data fallback with real daemon status + start/restart/port controls
+ - Fix rc.d restart race condition that silently left the daemon down
+ - Add configurable SMART-history DB location, fix stuck SMART History tab
+ - Fix SMART polling to work against SAS drives, not just ATA/NVMe
+ - Add SMART-history polling, trend graphs tab, and real critical-status detection
+ - Record real-box confirmation of the nginx self-heal fix
+ - Self-heal our nginx registration instead of fighting rc.nginx's regeneration
+ - Record real-hardware confirmation of the Locate LED blink
+ - Add manual "Force (re)detect" button and clarify the no-groups blurb
+ - Defer /disks fetch until a bay/PCIe group exists; add Disk Assignment blurb
+ - Start Settings from an empty layout on unconfigured production installs
+ - Always render LED color Reset button, disabled until an override exists
+ - Show empty-state prompt instead of demo trays on unconfigured installs
+ - Remove redundant "Disk Location" header
+ - Dark-theme-safe styling, tabbed layout, and real nginx findings from a live install
+ - Rename Tools-menu title to "Disk Location Next"
+ - Flash the whole tray tile on a SMART fault, not just the LED dot
+ - Add per-skin LED colors with defaults and a user override
+ - Confirm disks query field shapes against live unraid-api; note LED-color idea
+ - Add live disk-to-bay assignment with a Locate button
+ - Add live PCIe carrier component and a settings UI backed by a real config route
+ - Build the tray-map grid layout
+ - Move tray skins into the repo as contributable SVG assets
+ - Add real GraphQL queries, verified live against a 7.2+ instance
+ - Settle runtime packaging: Node.js + SEA, node:sqlite for storage
+ - Scaffold .plg daemon distribution: rc.d, nginx conf.d proxy, page, server
+ - Rename package to unraid-disklocation-next
+
 ###2026.09.18
  - First real installable release. Standalone Node SEA binary daemon, tray/
    bay drive map with a directory-discovered tray-skin + PCIe-carrier gallery,
