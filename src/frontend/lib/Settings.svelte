@@ -314,6 +314,13 @@
         </button>
       </div>
     {/each}
+    <div class="save-row">
+      <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
+        {status === "saving" ? "Saving..." : "Save"}
+      </button>
+      {#if status === "saved"}<span class="ok">Saved</span>{/if}
+      {#if status === "error"}<span class="err">Error: {errorMessage}</span>{/if}
+    </div>
   </section>
 
   <section class="settings-section">
