@@ -150,11 +150,31 @@ data*.
   open browser tab, which only a persistent API key can do. Passing through a browser
   session cookie would still leave the background-polling path needing a stored key, so
   there's no scenario where it replaces one - not worth the added complexity.
-- **SMART history storage.** The PHP version's purpose-built SQLite time series (temp,
-  power-on hours, sector counts, wear level, overall status; configurable retention) is a
-  good design and the plan is to carry the *idea* forward using `node:sqlite` (see runtime
-  packaging above), fed by this plugin's own `smartctl` calls per the finding above - not
-  yet built.
+- **SMART history storage - built.** [src/smart-history.ts](src/smart-history.ts) carries
+  forward the PHP version's SQLite-time-series idea using `node:sqlite`'s `DatabaseSync`
+  (one `smart_samples` table: `serial`, `ts`, `status`, and a JSON `data` blob for
+  temperature/power-on hours/sector counts/etc., so adding another tracked attribute later
+  never needs a migration). `node:sqlite` needs Node 22.5+ - confirmed working without any
+  flag on the real box's Node v22.18.0 by actually running
+  `node -e "require('node:sqlite')"` there rather than trusting version-range docs, so
+  `package.json`'s `engines` was bumped from `>=20` to `>=22.5`. `pollAllDisks()` calls the
+  existing `getDisks()` and **skips any disk with `isSpinning === false` entirely** -
+  `DiskResult` already carries that field, so a background poll never wakes a spun-down
+  drive just to log a data point (no need for `smartctl -n standby` tricks). For spinning
+  disks it runs `smartctl -H -A -j <device>` (reusing `locate.ts`'s `normalizeDevice()` for
+  the same injection-safe validation) and derives `ok`/`warn`/`critical` from
+  `smart_status.passed`, ATA attributes 5/197/198 (Reallocated/Pending/Offline-
+  Uncorrectable), or NVMe's `critical_warning`/`media_errors`/`percentage_used` - the same
+  attributes smartmontools' own health logic and dashboards like Scrutiny already treat as
+  failure-predictive, not thresholds invented for this project. Runs once ~10s after
+  startup then every 30 minutes (`DISKLOCATION_NEXT_SMART_POLL_MS`), pruning samples past a
+  180-day default retention (`DISKLOCATION_NEXT_SMART_RETENTION_DAYS`) each cycle. Exposed
+  via `GET /smart-history/latest` (`{serial: status}`) and `GET /smart-history?serial=...`
+  (full sample history). Verified against a real daemon process with a fake `smartctl`
+  binary and a mock GraphQL server standing in for `unraid-api`: confirmed a spun-down
+  synthetic disk was skipped entirely, a disk with nonzero pending-sector/reallocated
+  values correctly derived `critical`/`warn`, both routes returned the right data, and
+  setting retention to 0 days actually pruned rows on the next poll.
 - **Frontend framework: Svelte, built with Vite.** Chosen for a widget mounted directly
   into someone else's page (no iframe, per the UI-delivery decision above): Svelte compiles
   away to plain JS with no runtime framework object to load, and its scoped-by-default CSS
@@ -278,12 +298,35 @@ data*.
   around the whole tray/module when `status === "critical"`, colored from that skin's own
   (possibly user-overridden) critical LED color via a `--fault-color` CSS variable, so the two
   features stay consistent rather than introducing a second color knob. Disabled in favor of a
-  static ring under `prefers-reduced-motion: reduce`. Note this is currently reachable only from
-  the bundled demo data or a future SMART-history feature - unraid-api's `disks.smartStatus` is
-  OK/UNKNOWN only (see the schema findings above), so nothing in `derive-drive.ts` produces
-  `"critical"` from live data yet; that's still gated on the not-yet-built SMART-history
-  polling (its own `smartctl` calls, per the SMART history storage note above) actually
-  detecting a fault.
+  static ring under `prefers-reduced-motion: reduce`. **Now reachable from live data, not
+  just demo data.** `driveFromDisk(disk, historyStatus?)` in
+  [derive-drive.ts](src/shared/derive-drive.ts) combines the existing `smartStatus`-based
+  `ok`/`warn` with the SMART-history poller's own derived status via a `worseStatus()`
+  helper (rank `ok < warn < critical`, always keep the worse of the two) - `App.svelte`
+  fetches `GET /smart-history/latest` alongside `/disks` and passes each disk's status in.
+  Verified in a browser harness with a mocked backend: a disk assigned to a bay with a
+  mocked `historyStatus` of `"critical"` actually rendered with the `fault` class applied
+  on its `TraySkin`, confirmed by inspecting the live DOM, not just visually.
+- **SMART trend-graph tab - built.** A fourth "SMART History" tab
+  ([SmartHistory.svelte](src/frontend/lib/SmartHistory.svelte)) lists every disk
+  `unraid-api` reports (not just tray-assigned ones - trend history is useful before
+  you've configured a chassis at all), lazy-fetching `GET /smart-history?serial=...` only
+  once a drive is picked. Charts render via `uPlot` (~45KB, zero dependencies itself) -
+  the first third-party runtime dependency added to the frontend bundle beyond Svelte
+  itself, added specifically for this because a hand-rolled chart would have meant
+  reinventing axis/legend/time-scale handling for little benefit.
+  [TrendChart.svelte](src/frontend/lib/TrendChart.svelte) wraps a single `uPlot` instance,
+  reused for temperature, power-on hours, and a combined reallocated/pending/offline-
+  uncorrectable sectors chart. Two non-obvious things it has to handle that a typical
+  charting setup wouldn't: canvas `strokeStyle` can't resolve `var(--x)` CSS custom
+  properties itself, so colors are resolved via `getComputedStyle` before being handed to
+  uPlot; and this tab's panel can be `display:none` (an unselected tab) at the exact
+  moment a chart first mounts, per the tab-panel convention above, which would give uPlot
+  a real width of 0 - a `ResizeObserver` on the chart's container is what actually
+  triggers construction/resizing, since it naturally fires once the tab is switched to
+  and the container gets laid out for real. Verified in a browser harness: charts
+  rendered correctly from mocked history data on first visit to the tab, and survived
+  being hidden (switching to another tab) and shown again without going blank.
 
 ## Open questions (not yet decided)
 

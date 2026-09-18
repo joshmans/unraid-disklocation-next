@@ -4,6 +4,7 @@ import { loadLayoutConfig, saveLayoutConfig } from "./layout.js";
 import { getDisks } from "./graphql/client.js";
 import { startLocate, stopLocate, stopAllLocate, activeLocateDevices } from "./locate.js";
 import { startNginxSelfHeal } from "./nginx.js";
+import { startSmartHistoryPolling, getLatestStatuses, getHistory } from "./smart-history.js";
 
 // Deliberately no web framework - still just node:http. Routes beyond the
 // health check are proxied at /plugins/unraid-disklocation-next/api/ (see
@@ -20,6 +21,10 @@ function readBody(req: import("node:http").IncomingMessage): Promise<string> {
 }
 
 const server = createServer(async (req, res) => {
+  // Only the smart-history routes need query-string parsing (?serial=...) -
+  // every other route below is still a plain req.url equality check.
+  const url = new URL(req.url ?? "/", "http://internal");
+
   if (req.url === "/health") {
     const settings = loadSettings();
     res.writeHead(200, { "content-type": "application/json" });
@@ -87,6 +92,24 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === "/smart-history/latest" && req.method === "GET") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(getLatestStatuses()));
+    return;
+  }
+
+  if (url.pathname === "/smart-history" && req.method === "GET") {
+    const serial = url.searchParams.get("serial");
+    if (!serial) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "expected ?serial=<serialNum>" }));
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(getHistory(serial)));
+    return;
+  }
+
   res.writeHead(404);
   res.end();
 });
@@ -96,4 +119,5 @@ server.listen(PORT, () => {
   // Only worth registering with nginx once we're actually listening -
   // otherwise a reload could point it at a port nothing answers on yet.
   startNginxSelfHeal();
+  startSmartHistoryPolling();
 });

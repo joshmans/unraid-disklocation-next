@@ -1,5 +1,5 @@
 import type { DiskResult } from "../graphql/queries.js";
-import type { BayDrive, DriveType } from "./chassis-types.js";
+import type { BayDrive, DriveStatus, DriveType } from "./chassis-types.js";
 
 /**
  * `interfaceType: "PCIE"` reliably means NVMe. Beyond that, the 2026-09
@@ -14,13 +14,25 @@ function inferDriveType(disk: DiskResult): DriveType {
   return /ssd/i.test(disk.type) ? "ssd" : "hdd";
 }
 
-export function driveFromDisk(disk: DiskResult): BayDrive {
+const STATUS_RANK: Record<DriveStatus, number> = { ok: 0, warn: 1, critical: 2 };
+
+/** Never let a favorable reading from one source mask a bad one from the other. */
+function worseStatus(a: DriveStatus, b: DriveStatus): DriveStatus {
+  return STATUS_RANK[a] >= STATUS_RANK[b] ? a : b;
+}
+
+/**
+ * `historyStatus` is this plugin's own smartctl-derived assessment from
+ * smart-history.ts - the only way "critical" is ever reachable from live
+ * data, since unraid-api's smartStatus is OK/UNKNOWN only (see ROADMAP.md).
+ * Absent (no poll sample yet for this disk) is treated as "ok" so it never
+ * suppresses a real smartStatus-based warning.
+ */
+export function driveFromDisk(disk: DiskResult, historyStatus?: DriveStatus): BayDrive {
+  const smartStatusBased = disk.smartStatus === "OK" ? "ok" : "warn";
   return {
     driveType: inferDriveType(disk),
-    // unraid-api's disks.smartStatus is only ever "OK" or "UNKNOWN" (no
-    // detailed attributes over GraphQL - see ROADMAP.md), so "UNKNOWN" is
-    // surfaced as a caution rather than assumed healthy.
-    status: disk.smartStatus === "OK" ? "ok" : "warn",
+    status: worseStatus(smartStatusBased, historyStatus ?? "ok"),
     label: disk.serialNum || disk.name,
   };
 }

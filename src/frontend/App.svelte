@@ -3,15 +3,16 @@
   import TrayMap from "./lib/TrayMap.svelte";
   import Settings from "./lib/Settings.svelte";
   import DiskAssignment from "./lib/DiskAssignment.svelte";
+  import SmartHistory from "./lib/SmartHistory.svelte";
   import { driveIconMeta } from "./lib/driveicons";
   import { exampleLayout, exampleDrives, exampleLogos, exampleLedColors, emptyLayout } from "./lib/chassis";
-  import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive } from "./lib/chassis";
+  import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive, DriveStatus } from "./lib/chassis";
   import type { DiskResult } from "../graphql/queries";
   import { driveFromDisk } from "../shared/derive-drive";
 
   const API_BASE = "/plugins/unraid-disklocation-next/api";
 
-  type Tab = "map" | "assign" | "settings";
+  type Tab = "map" | "assign" | "settings" | "history";
   let activeTab: Tab = "map";
 
   let liveLayout: ChassisLayout = exampleLayout;
@@ -21,6 +22,11 @@
   let disks: DiskResult[] | null = null;
   let disksError = "";
   let disksLoading = false;
+  // This plugin's own smartctl-derived assessment (src/smart-history.ts) -
+  // the only way a real "critical" status is reachable, since unraid-api's
+  // smartStatus is OK/UNKNOWN only. Keyed by serial; missing entry means no
+  // poll sample yet.
+  let historyStatus: Record<string, DriveStatus> = {};
   // Split from disks on purpose: /layout is fast, /disks can take 20+
   // seconds on a large real array (unraid-api gathers SMART data per disk
   // under the hood) - the layout/settings/tray-map structure shouldn't sit
@@ -83,20 +89,34 @@
       disksError = err instanceof Error ? err.message : String(err);
     }
     disksLoading = false;
+
+    // Best-effort - a disk simply not having a poll sample yet isn't an
+    // error state worth surfacing, driveFromDisk() already treats a missing
+    // entry as "no negative signal from history yet".
+    try {
+      const res = await fetch(`${API_BASE}/smart-history/latest`);
+      if (res.ok) historyStatus = await res.json();
+    } catch {
+      // leave historyStatus as-is
+    }
   }
 
   // Real assigned occupancy once disks have loaded; the bundled demo occupancy
   // otherwise (unconfigured daemon, local dev without the proxy in front, or
   // just still loading).
-  $: liveDrives = computeDrives(liveAssignments, disks);
+  $: liveDrives = computeDrives(liveAssignments, disks, historyStatus);
 
-  function computeDrives(assignments: Assignments, disks: DiskResult[] | null): Record<string, BayDrive> {
+  function computeDrives(
+    assignments: Assignments,
+    disks: DiskResult[] | null,
+    historyStatus: Record<string, DriveStatus>,
+  ): Record<string, BayDrive> {
     if (!disks) return exampleDrives;
     const bySerial = new Map(disks.map((d) => [d.serialNum, d]));
     const result: Record<string, BayDrive> = {};
     for (const [bayId, serial] of Object.entries(assignments)) {
       const disk = bySerial.get(serial);
-      if (disk) result[bayId] = driveFromDisk(disk);
+      if (disk) result[bayId] = driveFromDisk(disk, historyStatus[serial]);
     }
     return result;
   }
@@ -153,9 +173,12 @@
     <button type="button" class:active={activeTab === "settings"} on:click={() => (activeTab = "settings")}>
       Settings
     </button>
+    <button type="button" class:active={activeTab === "history"} on:click={() => (activeTab = "history")}>
+      SMART History
+    </button>
   </nav>
 
-  <!-- All three tab panels stay mounted once loaded - switching tabs only
+  <!-- All four tab panels stay mounted once loaded - switching tabs only
        toggles visibility, so nothing re-fetches or re-initializes on every
        switch back to a tab you already visited. -->
   <section class="tab-panel" class:hidden={activeTab !== "map"}>
@@ -204,6 +227,10 @@
     {:else}
       <p class="status">Loading layout...</p>
     {/if}
+  </section>
+
+  <section class="tab-panel" class:hidden={activeTab !== "history"}>
+    <SmartHistory {disks} />
   </section>
 </main>
 
