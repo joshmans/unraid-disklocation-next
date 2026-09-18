@@ -251,87 +251,98 @@
     <button type="button" on:click={() => addGroup("pcie")}>+ PCIe group</button>
   </div>
 
-  <h3>Manufacturer logos</h3>
-  <p class="hint">Hotlinked logo URL applied to every bay using that skin. Leave blank for none.</p>
-  {#each skins as s (s.id)}
-    <label class="logo-row">
-      <span>{s.name}</span>
-      <input
-        type="url"
-        placeholder="https://..."
-        value={logos[s.id] ?? ""}
-        on:change={(e) => setLogo(s.id, e.currentTarget.value)}
-      />
-    </label>
-  {/each}
+  <section class="settings-section">
+    <h3>Manufacturer logos</h3>
+    <p class="hint">Hotlinked logo URL applied to every bay using that skin. Leave blank for none.</p>
+    {#each skins as s (s.id)}
+      <label class="logo-row">
+        <span>{s.name}</span>
+        <input
+          type="url"
+          placeholder="https://..."
+          value={logos[s.id] ?? ""}
+          on:change={(e) => setLogo(s.id, e.currentTarget.value)}
+        />
+      </label>
+    {/each}
+  </section>
 
-  <h3>LED colors</h3>
-  <p class="hint">
-    Each skin has its own default status-LED color (real trays don't all blink the same color) -
-    override any of them here. Reset clears an override back to that skin's default.
-  </p>
-  {#each skins as s (s.id)}
-    <div class="led-row">
-      <span class="skin-name">{s.name}</span>
-      {#each LED_STATUSES as st (st)}
-        <label class="led-swatch">
-          {LED_STATUS_LABELS[st]}
-          <input
-            type="color"
-            value={resolveLedColor(s, ledColors, st)}
-            on:input={(e) => setLedColor(s.id, st, e.currentTarget.value)}
-          />
-        </label>
-      {/each}
-      <button
-        type="button"
-        class="remove"
-        disabled={!ledColors[s.id]}
-        on:click={() => resetLedColors(s.id)}
-      >
-        Reset
-      </button>
-    </div>
-  {/each}
-
-  <h3>Daemon</h3>
-  {#if daemonStatus === null}
-    <p class="hint">Checking daemon status...</p>
-  {:else}
+  <section class="settings-section">
+    <h3>LED colors</h3>
     <p class="hint">
-      Status: {daemonStatus.running ? `Running on port ${daemonStatus.port}` : `Not running (configured port: ${daemonStatus.port})`}
+      Each skin has its own default status-LED color (real trays don't all blink the same color) -
+      override any of them here. Reset clears an override back to that skin's default.
     </p>
-    <div class="daemon-row">
-      <button type="button" on:click={onStartDaemonClick} disabled={daemonActionInFlight}>
-        {daemonActionInFlight ? "Working..." : daemonStatus.running ? "Restart daemon" : "Start daemon"}
+    {#each skins as s (s.id)}
+      <div class="led-row">
+        <span class="skin-name">{s.name}</span>
+        {#each LED_STATUSES as st (st)}
+          <label class="led-swatch">
+            {LED_STATUS_LABELS[st]}
+            <input
+              type="color"
+              value={resolveLedColor(s, ledColors, st)}
+              on:input={(e) => setLedColor(s.id, st, e.currentTarget.value)}
+            />
+          </label>
+        {/each}
+        <button
+          type="button"
+          class="remove"
+          disabled={!ledColors[s.id]}
+          on:click={() => resetLedColors(s.id)}
+        >
+          Reset
+        </button>
+      </div>
+    {/each}
+  </section>
+
+  <section class="settings-section">
+    <h3>Daemon</h3>
+    {#if daemonStatus === null}
+      <p class="hint">Checking daemon status...</p>
+    {:else}
+      <p class="hint">
+        Status:
+        <span class:ok={daemonStatus.running} class:err={!daemonStatus.running}>
+          {daemonStatus.running ? `Running on port ${daemonStatus.port}` : `Not running (configured port: ${daemonStatus.port})`}
+        </span>
+      </p>
+      <div class="daemon-row">
+        <button type="button" on:click={onStartDaemonClick} disabled={daemonActionInFlight}>
+          {daemonActionInFlight ? "Working..." : daemonStatus.running ? "Restart daemon" : "Start daemon"}
+        </button>
+      </div>
+      <label class="db-path-row">
+        Port
+        <input type="number" min="1" max="65535" bind:value={portDraft} disabled={daemonStatus.running} />
+      </label>
+      <button type="button" on:click={onSavePortClick} disabled={daemonStatus.running || daemonActionInFlight}>
+        Save port
       </button>
-    </div>
+      <p class="hint">
+        Only changeable while the daemon isn't running, so a Docker container or another
+        service can't collide with whatever it's currently bound to. Takes effect the next
+        time it starts.
+      </p>
+    {/if}
+    {#if daemonMessage}<p class="hint">{daemonMessage}</p>{/if}
+  </section>
+
+  <section class="settings-section">
+    <h3>Storage</h3>
     <label class="db-path-row">
-      Port
-      <input type="number" min="1" max="65535" bind:value={portDraft} disabled={daemonStatus.running} />
+      SMART history database path
+      <input type="text" bind:value={smartHistoryDbPath} placeholder={DEFAULT_SMART_DB_PATH} />
     </label>
-    <button type="button" on:click={onSavePortClick} disabled={daemonStatus.running || daemonActionInFlight}>
-      Save port
-    </button>
     <p class="hint">
-      Only changeable while the daemon isn't running, so a Docker container or another
-      service can't collide with whatever it's currently bound to. Takes effect the next
-      time it starts.
+      This is the one file this plugin writes to often (every SMART poll cycle) rather than
+      only when you save a change here, and the default lives on the flash boot drive - some
+      people prefer to redirect it to the array or a cache pool instead. Leave blank to use
+      the default. Takes effect the next time the plugin's service restarts.
     </p>
-  {/if}
-  {#if daemonMessage}<p class="hint">{daemonMessage}</p>{/if}
-
-  <h3>Storage</h3>
-  <label class="db-path-row">
-    SMART history database path
-    <input type="text" bind:value={smartHistoryDbPath} placeholder={DEFAULT_SMART_DB_PATH} />
-  </label>
-  <p class="hint">
-    This is the one file this plugin writes to often (every SMART poll cycle) rather than
-    only when you save a change here, and the default lives on the flash boot drive - some
-    people prefer to redirect it to the array or a cache pool instead. Leave blank to use
-    the default. Takes effect the next time the plugin's service restarts.
-  </p>
+  </section>
 
   <div class="save-row">
     <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
@@ -375,6 +386,16 @@
     border-radius: 4px;
     padding: 10px 12px;
     margin-bottom: 10px;
+  }
+  .settings-section {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+  }
+  .settings-section h3 {
+    margin-top: 0;
   }
   .group-header {
     display: flex;
