@@ -19,6 +19,7 @@
     offlineUncorrectable: number | null;
     mediaErrors: number | null;
     percentageUsed: number | null;
+    scsiGrownDefects: number | null;
     healthPassed: boolean | null;
   }
 
@@ -94,6 +95,11 @@
             label: "Offline uncorrectable",
             color: DEFAULT_LED_COLORS.critical,
             values: history.map((s) => s.offlineUncorrectable),
+          },
+          {
+            label: "SCSI grown defects",
+            color: "#2f6fd6",
+            values: history.map((s) => s.scsiGrownDefects),
           },
         ]}
       />

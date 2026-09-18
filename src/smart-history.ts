@@ -33,6 +33,7 @@ export interface SmartSample {
   offlineUncorrectable: number | null;
   mediaErrors: number | null;
   percentageUsed: number | null;
+  scsiGrownDefects: number | null;
   healthPassed: boolean | null;
 }
 
@@ -80,6 +81,11 @@ interface SmartctlJson {
     media_errors?: number;
     percentage_used?: number;
   };
+  // SAS/SCSI drives (device.protocol === "SCSI") have neither ATA attributes
+  // nor an NVMe log - confirmed against a real SAS drive on the live box.
+  // scsi_grown_defect_list is their closest analog to ATA's reallocated-
+  // sector count (a nonzero count means the drive has remapped bad sectors).
+  scsi_grown_defect_list?: number;
 }
 
 function ataAttribute(parsed: SmartctlJson, id: number): number | null {
@@ -101,19 +107,39 @@ function deriveStatus(parsed: SmartctlJson, sample: Omit<SmartSample, "status" |
     return "ok";
   }
   if ((sample.pendingSectors ?? 0) > 0 || (sample.offlineUncorrectable ?? 0) > 0) return "critical";
-  if ((sample.reallocatedSectors ?? 0) > 0) return "warn";
+  if ((sample.reallocatedSectors ?? 0) > 0 || (sample.scsiGrownDefects ?? 0) > 0) return "warn";
   return "ok";
+}
+
+/** Whether smartctl actually gave us anything worth recording, vs. skipping a standby drive or hitting an unsupported/errored device. */
+function hasUsableSmartData(parsed: SmartctlJson): boolean {
+  return (
+    parsed.smart_status !== undefined ||
+    parsed.ata_smart_attributes !== undefined ||
+    parsed.nvme_smart_health_information_log !== undefined ||
+    parsed.scsi_grown_defect_list !== undefined ||
+    parsed.temperature !== undefined
+  );
 }
 
 async function pollDevice(rawDevice: string): Promise<SmartSample | null> {
   const device = normalizeDevice(rawDevice);
-  const stdout = await run(SMARTCTL_BIN, ["-H", "-A", "-j", device]);
+  // `-n standby` is smartctl's own purpose-built mechanism for this: it skips
+  // the actual SMART query (and any resulting spin-up) if the drive reports
+  // itself already in standby, and is a plain no-op otherwise. This is used
+  // unconditionally rather than gating on unraid-api's `disk.isSpinning`
+  // field - confirmed against a real SAS drive on the live box that
+  // `isSpinning` can be false while the drive is demonstrably already awake
+  // (a fast, non-blocking read succeeded instantly), so trusting it as the
+  // sole gate would have meant this drive's history never gets collected.
+  const stdout = await run(SMARTCTL_BIN, ["-n", "standby", "-H", "-A", "-j", device]);
   let parsed: SmartctlJson;
   try {
     parsed = JSON.parse(stdout);
   } catch {
     return null; // smartctl produced no usable JSON (device error, unsupported, etc.)
   }
+  if (!hasUsableSmartData(parsed)) return null; // skipped (standby) or nothing readable
   const nvme = parsed.nvme_smart_health_information_log;
   const sample: Omit<SmartSample, "status" | "ts"> = {
     temperatureC: parsed.temperature?.current ?? null,
@@ -123,6 +149,7 @@ async function pollDevice(rawDevice: string): Promise<SmartSample | null> {
     offlineUncorrectable: ataAttribute(parsed, 198),
     mediaErrors: nvme?.media_errors ?? null,
     percentageUsed: nvme?.percentage_used ?? null,
+    scsiGrownDefects: parsed.scsi_grown_defect_list ?? null,
     healthPassed: parsed.smart_status?.passed ?? null,
   };
   return { ...sample, status: deriveStatus(parsed, sample), ts: Date.now() };
@@ -162,9 +189,8 @@ export async function pollAllDisks(): Promise<void> {
   }
 
   for (const disk of disks) {
-    // Never poll a spun-down drive just to log a data point - disk.isSpinning
-    // already tells us this without needing `smartctl -n standby` tricks.
-    if (!disk.isSpinning) continue;
+    // No isSpinning pre-filter here (see pollDevice's comment) - `-n standby`
+    // is what actually protects a genuinely sleeping drive from being woken.
     try {
       const sample = await pollDevice(disk.device);
       if (sample) insertSample(disk.serialNum, sample);

@@ -158,23 +158,41 @@ data*.
   flag on the real box's Node v22.18.0 by actually running
   `node -e "require('node:sqlite')"` there rather than trusting version-range docs, so
   `package.json`'s `engines` was bumped from `>=20` to `>=22.5`. `pollAllDisks()` calls the
-  existing `getDisks()` and **skips any disk with `isSpinning === false` entirely** -
-  `DiskResult` already carries that field, so a background poll never wakes a spun-down
-  drive just to log a data point (no need for `smartctl -n standby` tricks). For spinning
-  disks it runs `smartctl -H -A -j <device>` (reusing `locate.ts`'s `normalizeDevice()` for
-  the same injection-safe validation) and derives `ok`/`warn`/`critical` from
-  `smart_status.passed`, ATA attributes 5/197/198 (Reallocated/Pending/Offline-
-  Uncorrectable), or NVMe's `critical_warning`/`media_errors`/`percentage_used` - the same
-  attributes smartmontools' own health logic and dashboards like Scrutiny already treat as
-  failure-predictive, not thresholds invented for this project. Runs once ~10s after
-  startup then every 30 minutes (`DISKLOCATION_NEXT_SMART_POLL_MS`), pruning samples past a
-  180-day default retention (`DISKLOCATION_NEXT_SMART_RETENTION_DAYS`) each cycle. Exposed
-  via `GET /smart-history/latest` (`{serial: status}`) and `GET /smart-history?serial=...`
+  existing `getDisks()`, then for every disk runs `smartctl -n standby -H -A -j <device>`
+  (reusing `locate.ts`'s `normalizeDevice()` for the same injection-safe validation) and
+  derives `ok`/`warn`/`critical` from `smart_status.passed`, ATA attributes 5/197/198
+  (Reallocated/Pending/Offline-Uncorrectable), NVMe's
+  `critical_warning`/`media_errors`/`percentage_used`, or SCSI/SAS's
+  `scsi_grown_defect_list` - the same attributes smartmontools' own health logic and
+  dashboards like Scrutiny already treat as failure-predictive, not thresholds invented for
+  this project. **Corrected mid-implementation after live testing against the real box**:
+  the original design gated polling on `DiskResult.isSpinning`, skipping any disk that
+  field reported as not spinning, specifically to avoid waking a drive just to log a data
+  point. Deploying and testing against the real array found every disk reporting
+  `isSpinning: false` (the whole array was idle) - but a direct `dd` read from a real SAS
+  drive (`HITACHI H0H72108CLAR8000`) completed in 0.03s at full throughput, and a manual
+  `smartctl -H -A -j` against it returned real, populated data (`device.protocol: "SCSI"`,
+  no `ata_smart_attributes` at all) - proving it was already awake despite `isSpinning`
+  saying otherwise. `unraid-api`'s spin-state detection evidently doesn't work reliably for
+  SAS drives, so trusting `isSpinning` as the sole gate would have meant this plugin never
+  collects history for any SAS-attached drive, permanently. Fixed by dropping the
+  `isSpinning` pre-filter entirely and using `smartctl -n standby` instead - smartctl's own
+  purpose-built mechanism for exactly this, which skips the actual query (and any resulting
+  spin-up) only when the drive itself reports being in standby, and is a no-op otherwise
+  regardless of drive type. `pollDevice()` treats a response with none of
+  `smart_status`/`ata_smart_attributes`/the NVMe log/`scsi_grown_defect_list`/`temperature`
+  present as "nothing to record" (a standby skip or an unsupported/errored device) rather
+  than guessing at smartctl's exact standby-skip JSON shape. Runs once ~10s after startup
+  then every 30 minutes (`DISKLOCATION_NEXT_SMART_POLL_MS`), pruning samples past a 180-day
+  default retention (`DISKLOCATION_NEXT_SMART_RETENTION_DAYS`) each cycle. Exposed via
+  `GET /smart-history/latest` (`{serial: status}`) and `GET /smart-history?serial=...`
   (full sample history). Verified against a real daemon process with a fake `smartctl`
-  binary and a mock GraphQL server standing in for `unraid-api`: confirmed a spun-down
-  synthetic disk was skipped entirely, a disk with nonzero pending-sector/reallocated
-  values correctly derived `critical`/`warn`, both routes returned the right data, and
-  setting retention to 0 days actually pruned rows on the next poll.
+  binary and a mock GraphQL server standing in for `unraid-api`, covering all three device
+  families: an ATA disk correctly derived `ok`, a SCSI disk with nonzero
+  `scsi_grown_defect_list` correctly derived `warn` *despite reporting `isSpinning: false`*
+  (proving the fix), and a simulated standby-skip response correctly recorded nothing.
+  Retention was also verified by setting it to 0 days and confirming rows were pruned on
+  the next poll.
 - **Frontend framework: Svelte, built with Vite.** Chosen for a widget mounted directly
   into someone else's page (no iframe, per the UI-delivery decision above): Svelte compiles
   away to plain JS with no runtime framework object to load, and its scoped-by-default CSS
