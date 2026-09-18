@@ -5,6 +5,7 @@ import { getDisks } from "./graphql/client.js";
 import { startLocate, stopLocate, stopAllLocate, activeLocateDevices } from "./locate.js";
 import { startNginxSelfHeal } from "./nginx.js";
 import { startSmartHistoryPolling, getLatestStatuses, getHistory } from "./smart-history.js";
+import { previewImport } from "./classic-import.js";
 
 // Deliberately no web framework - still just node:http. Routes beyond the
 // health check are proxied at /plugins/unraid-disklocation-next/api/ (see
@@ -107,6 +108,17 @@ const server = createServer(async (req, res) => {
     }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(getHistory(serial)));
+    return;
+  }
+
+  if (url.pathname === "/classic-import/preview" && req.method === "GET") {
+    try {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(await previewImport()));
+    } catch (err) {
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: String(err) }));
+    }
     return;
   }
 

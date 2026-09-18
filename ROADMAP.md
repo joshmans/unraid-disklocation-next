@@ -412,15 +412,76 @@ data*.
   daemon-running scenario shows "Restart daemon" (not "Start") and the port field/Save
   button both visibly disabled; `php -l` confirms both PHP files parse cleanly and `jq`
   confirms the port-extraction expression behaves correctly with and without a saved
-  `port` key. **Not yet verified against the real box** (next step) - in particular, the
-  actual `$var['csrf_token']`/`var.ini` mechanics, and PHP's `posix`-free `/proc/$pid`
-  check, are confirmed patterns from reading `unraid-zram-card`'s real files, not yet
-  exercised end-to-end against this plugin's own installed copy.
+  `port` key. **Confirmed against the real box**: the Settings tab's Daemon section
+  loaded real status (not stuck on "Checking...") through the actual `$var['csrf_token']`
+  round trip on first try - the `unraid-zram-card`-derived pattern held up exactly as read
+  from its source, no adjustments needed.
+
+- **Import from the classic Disk Location plugin - built.** That plugin's real,
+  installed source (`/Users/josh/Git/unraid-disklocation` on the dev machine, not
+  derived from or bundled with this project - see the top of this doc) was read
+  directly to confirm this, and every claim below was cross-checked against a real
+  installed copy's actual `groups.json`/`locations.json`/`devices.json`, not just its
+  source:
+  - Storage: `/boot/config/plugins/disklocation/{groups,locations,devices}.json`.
+    `locations.json` is `{hash: {groupid, tray}}` (the real assignments); `groups.json`
+    is the cage/grid definition (`grid_rows`, `grid_columns`, `grid_count`
+    "row"/"column", `tray_direction`, `tray_start_num`, `disk_tray_direction` "h"/"v").
+  - The hash (from `cronjob.php`) is `sha256(model_name + serial_number)` -
+    `scsi_model_name ?? model_name`, smartctl's raw **vendor+model** string (e.g.
+    "HITACHI H0H72108CLAR8000"), not `unraid-api`'s split `disk.name` (which drops the
+    vendor prefix) - concatenated directly with `serial_number`, no separator.
+    Recomputed by hand for a real disk on the live box and it exactly matched that
+    disk's own key in the real `devices.json` before any code was written.
+  - Tray-number-to-grid-position math (from `tray_number_assign()` in
+    `functions_devices.php`, cross-checked against the real `groups.json`, where every
+    group uses `tray_direction: "1"`): zero-based index `i = tray - tray_start_num`,
+    then column-major (`col = floor(i / rows), row = i % rows`) if
+    `grid_count == "column"`, row-major otherwise. Only `tray_direction: "1"` is
+    imported - the other modes are more involved reversed/bottom-up schemes not
+    verified against real data, so a group using one is skipped and reported rather
+    than guessed at.
+  - `disk_tray_direction` maps directly onto this project's own `BayConfig.orientation`.
+    The classic plugin has no tray-skin or PCIe-carrier concept, so every imported
+    group becomes a `BayGroup` (never `PcieGroup`) with every bay defaulting to the
+    `classic` skin.
+
+  [src/classic-import.ts](src/classic-import.ts)'s `previewImport()` does the read-only
+  matching (reusing `smart-history.ts`'s exported `runSmartctl()` with the same
+  `-n standby` flag - a one-time import is no more entitled to wake a sleeping drive
+  than the background poller is) and returns a preview with match counts and skipped
+  groups; nothing is written until the user explicitly confirms. Applying an accepted
+  preview is just a normal `POST /layout` through the existing save path (`GET
+  /classic-import/preview` in [server.ts](src/server.ts)), not a separate write path -
+  one less thing that could disagree with how every other Settings save already works.
+  The Settings tab's new "Import from classic plugin" section checks silently on mount
+  and renders nothing at all if there's no classic-plugin data to import (`available:
+  false`), so an install that was never migrated from sees no trace of this feature.
+
+  Verified with a full synthetic scenario (fake `smartctl`, mock GraphQL, scratch
+  `groups.json`/`locations.json`): a `column`-flow group's positions matched hand
+  calculation exactly, a `row`-flow group's did too, a `tray_direction: "2"` group was
+  skipped and reported, and both an unmatched hash and a location pointing at a skipped
+  group were correctly dropped rather than silently mis-assigned. A browser harness
+  confirmed the section stays invisible when unavailable and, when available, that
+  confirming Import hands the exact previewed groups/assignments to the same
+  `persistAll()` every other save uses. **Not yet run against the real box's actual
+  classic-plugin data end-to-end** (next step) - the hash/position math were validated
+  against real data by hand, but the full preview-then-import flow through the live UI
+  hasn't been exercised yet.
 
 ## Open questions (not yet decided)
 
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
+- **The `.plg` install script is still a scaffold** (`plugin/unraid-disklocation-next.plg`
+  literally just echoes "scaffold only, install script not yet implemented" and exits 1) -
+  everything built this session has been deployed by hand over SSH. This is the next big
+  piece: a real install/upgrade/uninstall flow (SEA-binary build still pending too, see the
+  runtime-packaging decision above). **When this gets built, also add a Community Apps feed
+  entry** - a plugin XML in [joshmans/unraid-tools](https://github.com/joshmans/unraid-tools)
+  - so the plugin is actually discoverable/installable from Unraid's Community Applications,
+  not just a manual `.plg` URL paste.
 
 ## Conventions carried forward
 

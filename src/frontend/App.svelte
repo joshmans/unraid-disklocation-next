@@ -6,7 +6,7 @@
   import SmartHistory from "./lib/SmartHistory.svelte";
   import { driveIconMeta } from "./lib/driveicons";
   import { exampleDrives, emptyLayout } from "./lib/chassis";
-  import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive, DriveStatus } from "./lib/chassis";
+  import type { ChassisLayout, LogoConfig, LedColorConfig, Assignments, BayDrive, BayGroup, DriveStatus } from "./lib/chassis";
   import type { DiskResult } from "../graphql/queries";
   import { driveFromDisk } from "../shared/derive-drive";
   import { startDaemon as phpStartDaemon } from "./lib/daemon-control";
@@ -190,6 +190,10 @@
   function saveAssignments(assignments: Assignments) {
     return persistAll({ assignments });
   }
+
+  function importClassic(groups: BayGroup[], assignments: Assignments) {
+    return persistAll({ layout: { ...liveLayout, groups }, assignments });
+  }
 </script>
 
 <main>
@@ -264,6 +268,7 @@
         initialLedColors={liveLedColors}
         initialSmartHistoryDbPath={liveSmartHistoryDbPath}
         save={saveSettings}
+        {importClassic}
       />
     {:else}
       <p class="status">Loading layout...</p>

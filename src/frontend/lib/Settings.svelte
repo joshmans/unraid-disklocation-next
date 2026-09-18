@@ -21,8 +21,22 @@
     ledColors: LedColorConfig,
     smartHistoryDbPath: string,
   ) => Promise<{ ok: boolean; error?: string }>;
+  export let importClassic: (
+    groups: BayGroup[],
+    assignments: Record<string, string>,
+  ) => Promise<{ ok: boolean; error?: string }>;
 
+  const API_BASE = "/plugins/unraid-disklocation-next/api";
   const DEFAULT_SMART_DB_PATH = "/boot/config/plugins/unraid-disklocation-next/smart-history.db";
+
+  interface ImportPreview {
+    available: boolean;
+    groups?: BayGroup[];
+    assignments?: Record<string, string>;
+    matchedCount?: number;
+    totalLocations?: number;
+    skippedGroups?: { name: string; reason: string }[];
+  }
 
   function clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value));
@@ -46,6 +60,28 @@
   }
 
   onMount(refreshDaemonStatus);
+
+  let classicPreview: ImportPreview | null = null;
+  let classicImporting = false;
+  let classicMessage = "";
+
+  onMount(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/classic-import/preview`);
+      if (res.ok) classicPreview = await res.json();
+    } catch {
+      // No classic plugin, or daemon not reachable yet - section just stays hidden.
+    }
+  });
+
+  async function onImportClassicClick() {
+    if (!classicPreview?.groups) return;
+    classicImporting = true;
+    classicMessage = "";
+    const result = await importClassic(classicPreview.groups, classicPreview.assignments ?? {});
+    classicMessage = result.ok ? "Imported" : `Error: ${result.error}`;
+    classicImporting = false;
+  }
 
   async function onStartDaemonClick() {
     daemonActionInFlight = true;
@@ -172,6 +208,27 @@
 </script>
 
 <div class="settings">
+  {#if classicPreview?.available}
+    <section class="settings-section">
+      <h3>Import from classic plugin</h3>
+      <p class="hint">
+        Found {classicPreview.groups?.length ?? 0} group(s) from the original Disk Location
+        plugin - {classicPreview.matchedCount ?? 0} of {classicPreview.totalLocations ?? 0} tray
+        assignments matched a currently connected disk.
+        {#if classicPreview.skippedGroups?.length}
+          Skipped: {classicPreview.skippedGroups.map((g) => `${g.name} (${g.reason})`).join(", ")}.
+        {/if}
+      </p>
+      <p class="hint">Importing replaces your current chassis layout and disk assignments.</p>
+      <div class="save-row">
+        <button type="button" on:click={onImportClassicClick} disabled={classicImporting}>
+          {classicImporting ? "Importing..." : "Import (replaces current layout)"}
+        </button>
+        {#if classicMessage}<span class:ok={classicMessage === "Imported"} class:err={classicMessage !== "Imported"}>{classicMessage}</span>{/if}
+      </div>
+    </section>
+  {/if}
+
   <section class="settings-section">
   <h3>Chassis layout</h3>
   {#each layout.groups as group (group.id)}

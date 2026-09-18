@@ -17,7 +17,7 @@ import type { DriveStatus } from "./shared/chassis-types.js";
 // execFile+argv pattern locate.ts already established (never a shell string).
 
 const DEFAULT_DB_PATH = "/boot/config/plugins/unraid-disklocation-next/smart-history.db";
-const SMARTCTL_BIN = process.env.DISKLOCATION_NEXT_SMARTCTL_BIN ?? "smartctl";
+export const SMARTCTL_BIN = process.env.DISKLOCATION_NEXT_SMARTCTL_BIN ?? "smartctl";
 const POLL_MS = Number(process.env.DISKLOCATION_NEXT_SMART_POLL_MS ?? 30 * 60 * 1000);
 const RETENTION_DAYS = Number(process.env.DISKLOCATION_NEXT_SMART_RETENTION_DAYS ?? 180);
 const FIRST_POLL_DELAY_MS = 10_000;
@@ -68,13 +68,14 @@ function getDb(): DatabaseSync {
   return db;
 }
 
-function run(bin: string, args: string[]): Promise<string> {
+/** Exported so classic-import.ts can reuse the exact same invocation pattern for its own smartctl calls. */
+export function runSmartctl(args: string[]): Promise<string> {
   return new Promise((resolve) => {
     // smartctl's own exit code is a bitmask that's nonzero even on a
     // successful read (e.g. bit 4 = "prefail attribute below threshold" is
     // exactly one of the failure signals we WANT to see) - so stdout is what
     // matters here, not the exit code, unlike a typical execFile error check.
-    execFile(bin, args, { maxBuffer: 4 * 1024 * 1024 }, (_err, stdout) => resolve(stdout ?? ""));
+    execFile(SMARTCTL_BIN, args, { maxBuffer: 4 * 1024 * 1024 }, (_err, stdout) => resolve(stdout ?? ""));
   });
 }
 
@@ -144,7 +145,7 @@ async function pollDevice(rawDevice: string): Promise<SmartSample | null> {
   // `isSpinning` can be false while the drive is demonstrably already awake
   // (a fast, non-blocking read succeeded instantly), so trusting it as the
   // sole gate would have meant this drive's history never gets collected.
-  const stdout = await run(SMARTCTL_BIN, ["-n", "standby", "-H", "-A", "-j", device]);
+  const stdout = await runSmartctl(["-n", "standby", "-H", "-A", "-j", device]);
   let parsed: SmartctlJson;
   try {
     parsed = JSON.parse(stdout);
