@@ -646,11 +646,6 @@ data*.
 
 - **No settings-UI step for adding a brand-new bay group when a drive shows up in an unexpected
   physical slot** - assignment only works against slots the layout editor already created.
-- **Community Apps feed entry** - a plugin XML in
-  [joshmans/unraid-tools](https://github.com/joshmans/unraid-tools), so the plugin is
-  discoverable/installable from Unraid's Community Applications, not just a manual `.plg` URL
-  paste. Deliberately deferred until a real tagged release (see below) has actually been
-  installed and verified on a live box.
 
 ## Settled decisions (continued)
 
@@ -764,6 +759,16 @@ data*.
   (`/disks`, `smart-history.ts`'s poll loop, `classic-import.ts`) rather than cached at daemon
   startup - a saved change takes effect on the very next request, no restart needed, unlike the
   daemon's listening port (which genuinely is read once at process start).
+- **Community Apps feed entry - published.** A real install was confirmed working end-to-end on
+  the live box (both real bugs above fixed and verified) before doing this, per the deferred plan
+  this replaces. `unraid-disklocation-next.xml` in
+  [joshmans/unraid-tools](https://github.com/joshmans/unraid-tools) - matched the exact format
+  this author's own other two live CA entries in that same repo already use (read directly, not
+  guessed at): `<Name>`/`<Overview>`/`<PluginURL>`/`<PluginAuthor>` plus the optional
+  `<Support>`/`<Project>`/`<Category>`/`<MinVer>` block, `PluginAuthor` set to the forum handle
+  `shwa87` matching those other entries rather than the `.plg`'s own `author` entity (a real
+  name) - two different fields, two different real conventions. `MinVer` mirrors the `.plg`'s own
+  `min="7.2.0"` attribute, which the file's own comment says CA prefers when both are present.
 
 ## Conventions carried forward
 
