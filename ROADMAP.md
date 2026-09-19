@@ -793,6 +793,24 @@ data*.
      sustained-activity streak instead of continuing to flicker throughout it, verified against a
      synthetic harness driving a fake `flashSeq` at two different cadences. Both animations respect
      `prefers-reduced-motion`.
+- **Fixed the whole app inlining itself onto the Tools page - real install bug, fixed.** After
+  installing v2026.09.19c, the entire Tray Map UI rendered directly embedded on Unraid's Tools
+  page itself, below Update OS/Downgrade OS/etc, instead of behind its own link. Root cause:
+  [DiskLocationNext.page](plugin/pages/DiskLocationNext.page) had `Menu="Tools"` directly on the
+  same file that holds the full Svelte app - Unraid's Tools page concatenates the body of every
+  `Menu="Tools"` `.page` file directly inline (fine for a plugin whose Tools entry really is just
+  a short form/button, not fine for a full app). Fixed by copying the real, verified two-file
+  pattern both `DiskUtilities.page`+`disklocation.page` (the classic plugin, `Type="menu"`+`Type="xmenu"`)
+  and `HBAviewer.page`+`HBAviewer_Settings.page` (a real currently-published plugin, read directly
+  from its source rather than guessed) use: a tiny new
+  [DiskLocationNextTools.page](plugin/pages/DiskLocationNextTools.page) - `Menu="Tools"`,
+  `Type="menu"`, no body at all - is the actual Tools-page entry, and it links through to the real
+  app page purely by both files sharing the exact same `Title="Disk Location Next"` (that's the
+  matching key Unraid uses to route a `Type="menu"` tile's click, confirmed against both real
+  examples - `Menu` itself is just which top-level bucket a page's body pools into, not the
+  routing target). The real app page's own `Menu` changed from `"Tools"` to `"Utilities"` -
+  matching what both real reference plugins independently chose - so it no longer inlines
+  anywhere; [build/build.sh](build/build.sh) now stages both `.page` files into the package.
 
 ## Conventions carried forward
 
