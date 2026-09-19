@@ -3,11 +3,11 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.19c">
+<!ENTITY version    "2026.09.19d">
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "0a3687f38725cd15e075f10dcc132519a179cf3f11cb32a06c7072dd3310065d">
+<!ENTITY sha256     "18507cfac21cfeffc507780156d7958b95d7dfacd30c0d5399c528bd955e93fe">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,9 @@
 -->
 
 <CHANGES>
+###2026.09.19d
+ - Stop the app inlining itself onto Unraid's Tools page (#2)
+
 ###2026.09.19c
  - Blink the tray LED for a bad status and real drive activity (#1)
  - Record the Community Apps feed entry publication in ROADMAP.md
