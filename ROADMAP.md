@@ -702,12 +702,54 @@ data*.
     binary embeds a copy of whatever `node` builds it, so a macOS/Windows runner would ship a
     binary that can't run on the target Unraid host), pinned to Node 22.x LTS.
   - `plugin/rc.d/rc.unraid-disklocation-next` now execs the compiled binary directly (no system
-    Node dependency, no `NODE_TLS_REJECT_UNAUTHORIZED` workaround needed either) instead of the
-    placeholder `node dist/index.js` invocation.
+    Node dependency) instead of the placeholder `node dist/index.js` invocation.
   - The `.plg`'s post-install script installs the rc.d script at `/usr/local/etc/rc.d/` -
     matching `daemon-control.php`'s own `$RC_SCRIPT` path (the one the Settings tab's
     Start/Stop/Restart buttons already exercise successfully), not the ad hoc `/etc/rc.d/...`
     path this session's manual dev-restart commands used as a convenience.
+  - **Two real bugs found on the first actual install, both fixed and re-released (v2026.09.19,
+    v2026.09.19-2):**
+    1. `NODE_TLS_REJECT_UNAUTHORIZED=0` was dropped from the rc.d script's `start()` during the
+       SEA rework, on the wrong assumption it was tied to "system Node's own trust store." It
+       isn't - `unraid-api`'s GraphQL endpoint is served over HTTPS with Unraid's own self-signed
+       certificate, and Node's `fetch()`/undici rejects an untrusted cert by default regardless
+       of whether it's system Node or a compiled SEA binary. Symptom on the real box: every
+       `/disks` call failed with a bare `TypeError: fetch failed` and no visible cause.
+       Reproduced and fixed against a real self-signed HTTPS server locally before re-releasing:
+       confirmed the exact error text matched, confirmed the cause (`self-signed certificate`)
+       was hiding on `err.cause` where a plain `String(err)` never surfaces it, and added
+       `server.ts`'s `describeError()` (include `.cause` when present) to the two routes that
+       call into `unraid-api` so a future misconfiguration is diagnosable from the UI itself.
+    2. Far more serious: **upgrades never actually installed new files, silently, across two
+       whole releases.** Confirmed directly against the real box: `upgradepkg --install-new`
+       means "install only if nothing by this exact package name is already registered in
+       `/var/log/packages` - otherwise skip unconditionally, regardless of whether the file
+       content differs." This plugin's `<FILE Name="...">` used a deliberately version-less local
+       cache filename (`&name;.txz`) specifically so `removepkg` calls could stay
+       version-independent - that choice meant every release registered under the identical
+       Slackware package name, so every subsequent install silently no-op'd
+       (`upgradepkg`'s own literal output: `Skipping package unraid-disklocation-next (already
+       installed)`), even surviving a full `plugin remove` (Unraid's own outer "is this plugin
+       version already installed" bookkeeping - read from a persistent
+       `/boot/config/plugins/<name>.plg` symlink target our uninstall script never touched, since
+       it's a flat sibling of the config directory we deliberately preserve - and Slackware's own
+       inner package-name check are two entirely separate mechanisms). This is exactly why the
+       `NODE_TLS_REJECT_UNAUTHORIZED` fix above never reached the box despite two published
+       releases and Unraid's plugin manifest correctly showing the newer version each time -
+       diagnosed by manually running the exact same `wget`+`sha256sum` and
+       `upgradepkg --install-new` commands Unraid's installer runs, directly over SSH, until
+       Slackware's own tool printed the smoking gun. Fixed by encoding `&version;` into the local
+       cache filename too (matching the real, currently-working `unraid-docker-folders`
+       precedent, which does exactly this - confirmed by re-reading its `.plg` a second time
+       after this bug, not assumed), plus a defensive pre-install cleanup step (and matching
+       `Method="remove"` cleanup) that `removepkg`s any package already registered under our
+       name, with or without a version suffix, so a box already affected by the bug self-heals on
+       its very next upgrade rather than needing manual intervention.
+    - **A second real XML bug caught while fixing the above**: a literal `--` inside an XML
+      comment (quoting the install-new flag by name) is invalid per the XML spec - a comment's
+      content can never contain `--` except immediately before the closing `-->`. Caught by
+      actually parsing the file after editing, not by eyeballing it - the same discipline that
+      caught the CDATA/entity-expansion bug earlier.
 - **Real README.md - built.** Replaced the 17-line status blurb with actual user-facing
   documentation: features, requirements (Unraid 7.2+, an `unraid-api` key), install instructions
   (manual `.plg` URL paste today), a tab-by-tab usage tour, and a contributing pointer.
