@@ -175,6 +175,15 @@ mkdir -p "$PLUGIN_LOC"
 # no reason to leave it sitting on the flash boot drive.
 rm -f "$PLUGIN_LOC/$NAME.txz"
 
+# Cleanup from a fixed bug: v2026.09.19d shipped a Menu="Tools" stub page
+# meant to link to the real app elsewhere on the Tools page - it never
+# actually got that link and left an empty header there instead. The real
+# app page no longer lives under Tools at all (moved to the Disk
+# Utilities group), so the stub is now dead weight - upgradepkg only adds/
+# overwrites files listed in the new package, it doesn't remove ones only
+# the old package shipped, so this has to be deleted explicitly.
+rm -f "$EMHTTP_LOC/DiskLocationNextTools.page"
+
 if [ ! -f "$PLUGIN_LOC/layout.json" ]; then
   cat > "$PLUGIN_LOC/layout.json" <<'JSON'
 {"layout":{"id":"custom","name":"My chassis","groups":[]},"logos":{}}

@@ -793,24 +793,34 @@ data*.
      sustained-activity streak instead of continuing to flicker throughout it, verified against a
      synthetic harness driving a fake `flashSeq` at two different cadences. Both animations respect
      `prefers-reduced-motion`.
-- **Fixed the whole app inlining itself onto the Tools page - real install bug, fixed.** After
-  installing v2026.09.19c, the entire Tray Map UI rendered directly embedded on Unraid's Tools
-  page itself, below Update OS/Downgrade OS/etc, instead of behind its own link. Root cause:
-  [DiskLocationNext.page](plugin/pages/DiskLocationNext.page) had `Menu="Tools"` directly on the
-  same file that holds the full Svelte app - Unraid's Tools page concatenates the body of every
-  `Menu="Tools"` `.page` file directly inline (fine for a plugin whose Tools entry really is just
-  a short form/button, not fine for a full app). Fixed by copying the real, verified two-file
-  pattern both `DiskUtilities.page`+`disklocation.page` (the classic plugin, `Type="menu"`+`Type="xmenu"`)
-  and `HBAviewer.page`+`HBAviewer_Settings.page` (a real currently-published plugin, read directly
-  from its source rather than guessed) use: a tiny new
-  [DiskLocationNextTools.page](plugin/pages/DiskLocationNextTools.page) - `Menu="Tools"`,
-  `Type="menu"`, no body at all - is the actual Tools-page entry, and it links through to the real
-  app page purely by both files sharing the exact same `Title="Disk Location Next"` (that's the
-  matching key Unraid uses to route a `Type="menu"` tile's click, confirmed against both real
-  examples - `Menu` itself is just which top-level bucket a page's body pools into, not the
-  routing target). The real app page's own `Menu` changed from `"Tools"` to `"Utilities"` -
-  matching what both real reference plugins independently chose - so it no longer inlines
-  anywhere; [build/build.sh](build/build.sh) now stages both `.page` files into the package.
+- **Fixed the whole app inlining itself onto the Tools page - real install bug, fixed in two
+  passes.** After installing v2026.09.19c, the entire Tray Map UI rendered directly embedded on
+  Unraid's Tools page itself, below Update OS/Downgrade OS/etc, instead of behind its own link.
+  Root cause: [DiskLocationNext.page](plugin/pages/DiskLocationNext.page) had `Menu="Tools"`
+  directly on the same file that holds the full Svelte app - Unraid's Tools page concatenates the
+  body of every `Menu="Tools"` `.page` file directly inline.
+  - First attempt (v2026.09.19d, later corrected): added a separate `Menu="Tools"`, `Type="menu"`,
+    no-body stub file and moved the real app to `Menu="Utilities"`, on the theory (modeled on
+    `HBAviewer.page`+`HBAviewer_Settings.page`, a real currently-published plugin) that a
+    `Type="menu"` stub links through to whatever other page shares its `Title`. Wrong: on the real
+    box this rendered as its own empty section header ("Disk Location Next") on the Tools page,
+    with no link and no content - `Type="menu"` creates a *named group section*, it doesn't link
+    to an arbitrarily-named `Menu` elsewhere.
+  - Actual fix: matched what the classic `disklocation` plugin's own two files do, more precisely
+    read this time - `DiskUtilities.page` (`Menu="Tools"`, `Type="menu"`, `Title="Disk Utilities"`,
+    no body) creates the "Disk Utilities" section header/group *by that name*, and any other page
+    with `Menu="DiskUtilities"` (the group name with spaces stripped) is listed as a tile inside
+    it - confirmed live on the user's own box, where unrelated third-party plugins ("Parity
+    Problems Assistant", "Preclear Disk") already populate that same shared "Disk Utilities"
+    group. So: no Tools-page stub file needed at all. `DiskLocationNext.page` now has
+    `Menu="DiskUtilities"`, `Type="xmenu"`, `Tabs="false"` directly - the same shape as the classic
+    plugin's own `disklocationsystem.page` (a real, single-tile, non-tabbed page under that group)
+    - and shows up as its own tile alongside the existing Disk Utilities entries, matching the
+    user's explicit ask ("it should be under the disk utilities section like the legacy plugin").
+    The now-pointless `DiskLocationNextTools.page` stub was deleted, and the `.plg`'s post-install
+    script `rm -f`s that filename explicitly on upgrade - `upgradepkg` only adds/overwrites files
+    the new package lists, it doesn't delete ones only an older package shipped, so leftover stub
+    files from v2026.09.19d would otherwise linger forever.
 
 ## Conventions carried forward
 
