@@ -8,9 +8,14 @@
 #
 # Runtime: Node.js + Single Executable Applications (SEA) - see ROADMAP.md.
 # start() execs the compiled standalone binary directly - no system Node.js
-# dependency (Unraid doesn't bundle Node itself), no NODE_TLS_REJECT_UNAUTHORIZED
-# workaround needed either since nothing here depends on system Node's own
-# default trust-store handling.
+# dependency (Unraid doesn't bundle Node itself). NODE_TLS_REJECT_UNAUTHORIZED=0
+# is still needed though (a wrong assumption dropped it briefly during the
+# SEA rework, which broke every /disks call with a bare "TypeError: fetch
+# failed" on a real install - confirmed live): unraid-api's GraphQL endpoint
+# is served over HTTPS with Unraid's own self-signed certificate, and
+# Node's fetch()/undici rejects an untrusted cert by default regardless of
+# whether it's system Node or a compiled SEA binary - same TLS stack either
+# way, nothing to do with "system Node's own trust store" specifically.
 #
 # The port is read from layout.json via jq (already relied on elsewhere in
 # Unraid's own rc.nginx, not a new dependency) - user-configurable through
@@ -37,7 +42,7 @@ start() {
   local port
   port="$(jq -r '.port // 3838' "$LAYOUT_PATH" 2>/dev/null)"
   [[ "$port" =~ ^[0-9]+$ ]] || port=3838
-  nohup /usr/bin/env PORT="$port" "$APP_BIN" >>"$LOGFILE" 2>&1 &
+  nohup /usr/bin/env NODE_TLS_REJECT_UNAUTHORIZED=0 PORT="$port" "$APP_BIN" >>"$LOGFILE" 2>&1 &
   local pid=$!
   echo "$pid" >"$PIDFILE"
   # A naive `echo $!` here can't tell a real start from one that immediately

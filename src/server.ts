@@ -14,6 +14,16 @@ import { saveLogo, readLogo, logoFilename } from "./logos.js";
 // nginx.ts, which strips that prefix before forwarding here).
 const PORT = Number(process.env.PORT ?? 3838);
 
+// fetch()'s own thrown TypeError (e.g. "TypeError: fetch failed" for a TLS
+// handshake/cert rejection) carries the actually-useful detail on `.cause`,
+// which plain String(err) drops entirely - confirmed live: this hid a real
+// self-signed-cert misconfiguration behind a message that gave no hint what
+// was actually wrong.
+function describeError(err: unknown): string {
+  const cause = err instanceof Error ? err.cause : undefined;
+  return cause ? `${String(err)}: ${String(cause)}` : String(err);
+}
+
 function readBody(req: import("node:http").IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -98,7 +108,7 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(enrichWithArrayState(disks)));
     } catch (err) {
       res.writeHead(502, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: String(err) }));
+      res.end(JSON.stringify({ error: describeError(err) }));
     }
     return;
   }
@@ -149,7 +159,7 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(await previewImport()));
     } catch (err) {
       res.writeHead(502, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: String(err) }));
+      res.end(JSON.stringify({ error: describeError(err) }));
     }
     return;
   }
