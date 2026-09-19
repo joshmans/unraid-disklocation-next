@@ -26,13 +26,22 @@ RELEASE_MODE=false
 [[ "${1:-}" == "--release" ]] && RELEASE_MODE=true
 
 VERSION="$(date +%Y.%m.%d)"
-# Same-day re-run (a second release on one calendar day) gets a numeric
-# suffix rather than colliding with an existing tag - mirrors
-# unraid-docker-folders' own version-collision handling.
+# Same-day re-run (a second release on one calendar day) gets a trailing
+# letter (2026.09.19, then 2026.09.19b, 2026.09.19c, ...) rather than
+# colliding with an existing tag - per explicit direction, not the earlier
+# numeric -2/-3 suffix scheme.
 if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-  n=2
-  while git rev-parse "v${VERSION}-${n}" >/dev/null 2>&1; do n=$((n + 1)); done
-  VERSION="${VERSION}-${n}"
+  letters="bcdefghijklmnopqrstuvwxyz"
+  found=false
+  for ((i = 0; i < ${#letters}; i++)); do
+    candidate="${VERSION}${letters:i:1}"
+    if ! git rev-parse "v${candidate}" >/dev/null 2>&1; then
+      VERSION="$candidate"
+      found=true
+      break
+    fi
+  done
+  $found || { echo "ran out of same-day letter suffixes (a-z) for ${VERSION}" >&2; exit 1; }
 fi
 echo "Building ${NAME} ${VERSION}"
 
