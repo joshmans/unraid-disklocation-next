@@ -35,6 +35,7 @@
   let liveSmartHistoryDbPath = "";
   let liveShowRoleColor = false;
   let liveShowRoleIcon = false;
+  let liveTempUnit: "C" | "F" = "C";
   let liveBrandLogos: BrandLogoConfig = {};
   let liveManufacturerOverrides: ManufacturerOverrides = {};
   let disks: DiskResult[] | null = null;
@@ -136,6 +137,7 @@
           liveSmartHistoryDbPath = stored.smartHistoryDbPath ?? "";
           liveShowRoleColor = stored.showRoleColor ?? false;
           liveShowRoleIcon = stored.showRoleIcon ?? false;
+          liveTempUnit = stored.tempUnit ?? "C";
           liveBrandLogos = stored.brandLogos ?? {};
           liveManufacturerOverrides = stored.manufacturerOverrides ?? {};
         } else {
@@ -221,6 +223,7 @@
     smartHistoryDbPath?: string;
     showRoleColor?: boolean;
     showRoleIcon?: boolean;
+    tempUnit?: "C" | "F";
     brandLogos?: BrandLogoConfig;
     manufacturerOverrides?: ManufacturerOverrides;
   }): Promise<{ ok: boolean; error?: string }> {
@@ -232,6 +235,7 @@
       smartHistoryDbPath: next.smartHistoryDbPath ?? liveSmartHistoryDbPath,
       showRoleColor: next.showRoleColor ?? liveShowRoleColor,
       showRoleIcon: next.showRoleIcon ?? liveShowRoleIcon,
+      tempUnit: next.tempUnit ?? liveTempUnit,
       brandLogos: next.brandLogos ?? liveBrandLogos,
       manufacturerOverrides: next.manufacturerOverrides ?? liveManufacturerOverrides,
     };
@@ -249,6 +253,7 @@
       liveSmartHistoryDbPath = merged.smartHistoryDbPath;
       liveShowRoleColor = merged.showRoleColor;
       liveShowRoleIcon = merged.showRoleIcon;
+      liveTempUnit = merged.tempUnit;
       liveBrandLogos = merged.brandLogos;
       liveManufacturerOverrides = merged.manufacturerOverrides;
       // A successful save proves the daemon is reachable, so this always
@@ -267,8 +272,9 @@
     smartHistoryDbPath: string,
     showRoleColor: boolean,
     showRoleIcon: boolean,
+    tempUnit: "C" | "F",
   ) {
-    return persistAll({ layout, logos, ledColors, smartHistoryDbPath, showRoleColor, showRoleIcon });
+    return persistAll({ layout, logos, ledColors, smartHistoryDbPath, showRoleColor, showRoleIcon, tempUnit });
   }
 
   function saveAssignments(assignments: Assignments) {
@@ -395,7 +401,7 @@
   </section>
 
   <section class="tab-panel" class:hidden={activeTab !== "history"}>
-    <SmartHistory {disks} {disksError} />
+    <SmartHistory {disks} {disksError} tempUnit={liveTempUnit} />
   </section>
 
   <section class="tab-panel" class:hidden={activeTab !== "settings"}>
@@ -407,6 +413,7 @@
         initialSmartHistoryDbPath={liveSmartHistoryDbPath}
         initialShowRoleColor={liveShowRoleColor}
         initialShowRoleIcon={liveShowRoleIcon}
+        initialTempUnit={liveTempUnit}
         save={saveSettings}
         {importClassic}
         {convertGroupToPcie}

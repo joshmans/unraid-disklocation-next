@@ -9,6 +9,7 @@
   // history is useful before you've configured a chassis at all.
   export let disks: DiskResult[] | null;
   export let disksError = "";
+  export let tempUnit: "C" | "F" = "C";
 
   interface Sample {
     ts: number;
@@ -45,6 +46,14 @@
   }
 
   $: timestamps = history?.map((s) => s.ts) ?? [];
+
+  // Samples are always stored in Celsius (smartctl's own native unit, see
+  // smart-history.ts) - Fahrenheit is a display-only conversion done here,
+  // never persisted, so switching the Settings toggle never touches history.
+  function toDisplayTemp(celsius: number | null): number | null {
+    if (celsius === null) return null;
+    return tempUnit === "F" ? (celsius * 9) / 5 + 32 : celsius;
+  }
 </script>
 
 <div class="smart-history">
@@ -82,9 +91,11 @@
       </p>
     {:else}
       <TrendChart
-        title="Temperature (°C)"
+        title={`Temperature (°${tempUnit})`}
         {timestamps}
-        series={[{ label: "Temperature", color: DEFAULT_LED_COLORS.warn, values: history.map((s) => s.temperatureC) }]}
+        series={[
+          { label: "Temperature", color: DEFAULT_LED_COLORS.warn, values: history.map((s) => toDisplayTemp(s.temperatureC)) },
+        ]}
       />
       <TrendChart
         title="Power-on hours"
