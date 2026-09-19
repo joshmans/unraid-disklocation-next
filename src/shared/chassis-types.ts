@@ -29,6 +29,8 @@ export interface BayDrive {
   /** Raw vendor/model strings (unraid-api's disk.vendor/disk.name) - kept separate from `label` (serial-first) purely for brand.ts's detection, see role.ts's sibling brand.ts. */
   vendor?: string;
   model?: string;
+  /** unraid-api's disks.device (e.g. "sda") - used to key the /activity poll (see disk-activity.ts), not shown directly anywhere. */
+  device?: string;
 }
 
 export interface BayConfig {

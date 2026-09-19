@@ -23,6 +23,14 @@
   export let model: string | undefined = undefined;
   /** True only when logoUrl is a drive-brand logo (per-bay override or auto-detected), not the tray skin's own generic fallback logo - the skin's chassis-branding logo says nothing about the drive occupying this bay, so it shouldn't suppress the make/model text the way a real brand match does. */
   export let hasBrandLogo = false;
+  /**
+   * Bumped by the caller each time the backend's /activity poll sees this
+   * device's read/write completion counters move (see disk-activity.ts).
+   * The value itself is meaningless - only *changing* it matters, since
+   * that's what forces the {#key} below to remount the LED and replay its
+   * one-shot flash, even for back-to-back polls that both find activity.
+   */
+  export let flashSeq = 0;
 
   $: vb = orientation === "horizontal" ? { w: 220, h: 64 } : { w: 76, h: 190 };
   $: svgMarkup = orientation === "horizontal" ? skin.svg.horizontal : skin.svg.vertical;
@@ -47,10 +55,14 @@
 >
   <div class="base">{@html svgMarkup}</div>
 
-  <div
-    class="led"
-    style="left:{pct(o.led.cx ?? 0, vb.w)};top:{pct(o.led.cy ?? 0, vb.h)};width:{pct((o.led.r ?? 4) * 2, vb.w)};background:{resolvedLedColor}"
-  ></div>
+  {#key flashSeq}
+    <div
+      class="led"
+      class:blink={status === "warn" || status === "critical"}
+      class:flicker={flashSeq > 0}
+      style="left:{pct(o.led.cx ?? 0, vb.w)};top:{pct(o.led.cy ?? 0, vb.h)};width:{pct((o.led.r ?? 4) * 2, vb.w)};background:{resolvedLedColor}"
+    ></div>
+  {/key}
 
   <div
     class="icon"
@@ -172,6 +184,48 @@
     aspect-ratio: 1;
     border-radius: 50%;
     transform: translate(-50%, -50%);
+  }
+  /* Matches the classic plugin's own convention: a drive that isn't in
+     plain normal operation (spun down, degraded, disabled/missing) gets a
+     blinking status LED, not just a static color change. */
+  .led.blink {
+    animation: tray-led-blink 1s step-end infinite;
+  }
+  @keyframes tray-led-blink {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0.15;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .led.blink {
+      animation: none;
+    }
+  }
+  /* A quick, single flash rather than a steady loop - each /activity poll
+     that finds fresh I/O retriggers this (see TrayMap.svelte's key-based
+     restart trick), so a busy drive keeps re-flashing every poll tick while
+     an idle one just goes solid again. Meant to read as "the drive just did
+     something," not as a status the way .blink is. */
+  .led.flicker {
+    animation: tray-led-flash 0.3s ease-out;
+  }
+  @keyframes tray-led-flash {
+    0% {
+      opacity: 0.2;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .led.flicker {
+      animation: none;
+    }
   }
   .icon {
     position: absolute;

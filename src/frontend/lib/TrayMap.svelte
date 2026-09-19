@@ -18,6 +18,8 @@
   export let showRoleIcon = false;
   export let brandLogos: BrandLogoConfig = {};
   export let manufacturerOverrides: ManufacturerOverrides = {};
+  /** Keyed by device (e.g. "sda"), bumped each time App.svelte's /activity poll sees that device do I/O - see TraySkin.svelte's flashSeq prop. No entry means never observed active. */
+  export let activity: Record<string, number> = {};
 
   $: skinById = new Map(skins.map((s) => [s.id, s]));
 </script>
@@ -52,6 +54,7 @@
                   logoUrl={brandLogoUrl ?? logos[bay.skinId] ?? null}
                   hasBrandLogo={!!brandLogoUrl}
                   ledColor={resolveLedColor(skin, ledColors, drive.status)}
+                  flashSeq={drive.device ? (activity[drive.device] ?? 0) : 0}
                   role={drive.role}
                   poolName={drive.poolName}
                   sizeBytes={drive.sizeBytes}

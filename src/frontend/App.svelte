@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import TrayMap from "./lib/TrayMap.svelte";
   import Settings from "./lib/Settings.svelte";
   import DiskAssignment from "./lib/DiskAssignment.svelte";
@@ -67,14 +67,59 @@
   // chassis has been configured at all - so this just waits for the fast
   // /layout fetch to finish, not for any particular layout content.
   let disksRequested = false;
+  // Keyed by device (e.g. "sda"); bumped, not just toggled, so TraySkin can
+  // tell two consecutive active polls apart and replay its flash for each
+  // one rather than only lighting up once at the start of a busy streak.
+  let activity: Record<string, number> = {};
+  let activityTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
     loadLayout();
   });
 
+  onDestroy(() => stopActivityPolling());
+
   $: if (layoutLoaded && !disksRequested) {
     disksRequested = true;
     loadDisks();
+  }
+
+  // Only while the tray map itself is visible and there's something to
+  // poll for - this hits local /sys/block/*/stat reads (see
+  // disk-activity.ts), not unraid-api, so it's cheap, but no reason to run
+  // it against a tab nobody's looking at.
+  $: if (activeTab === "map" && disks && !activityTimer) {
+    startActivityPolling();
+  } else if ((activeTab !== "map" || !disks) && activityTimer) {
+    stopActivityPolling();
+  }
+
+  function startActivityPolling() {
+    pollActivity();
+    activityTimer = setInterval(pollActivity, 1500);
+  }
+
+  function stopActivityPolling() {
+    if (activityTimer) clearInterval(activityTimer);
+    activityTimer = null;
+  }
+
+  async function pollActivity() {
+    if (!disks?.length) return;
+    const devices = disks.map((d) => d.device).filter(Boolean);
+    if (!devices.length) return;
+    try {
+      const res = await fetch(`${API_BASE}/activity?devices=${devices.join(",")}`);
+      if (!res.ok) return;
+      const result: Record<string, boolean> = await res.json();
+      const next = { ...activity };
+      for (const [device, wasActive] of Object.entries(result)) {
+        if (wasActive) next[device] = (next[device] ?? 0) + 1;
+      }
+      activity = next;
+    } catch {
+      // best-effort - a missed tick just means the LED sits solid a moment longer
+    }
   }
 
   async function loadLayout() {
@@ -303,6 +348,7 @@
           showRoleIcon={liveShowRoleIcon}
           brandLogos={liveBrandLogos}
           manufacturerOverrides={liveManufacturerOverrides}
+          {activity}
         />
 
         <section class="legend-panel">

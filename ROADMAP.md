@@ -769,6 +769,30 @@ data*.
   `shwa87` matching those other entries rather than the `.plg`'s own `author` entity (a real
   name) - two different fields, two different real conventions. `MinVer` mirrors the `.plg`'s own
   `min="7.2.0"` attribute, which the file's own comment says CA prefers when both are present.
+- **Tray LED now blinks for both a bad status and real drive activity - built.** Two separate
+  fixes to [TraySkin.svelte](src/frontend/lib/TraySkin.svelte)'s `.led` dot, which used to be a
+  static color swatch with no animation at all (only the outer per-tray glow flashed, and only
+  for `critical`):
+  1. A slower `step-end` blink (mirroring the classic plugin's status-orb convention in
+     `functions_devices.php`'s `get_unraid_disk_status()`) whenever `status` is `warn`/`critical`.
+  2. A real, physical-activity-LED-style flicker driven by actual disk I/O, not a power/status
+     state - what "the tray LEDs blink" actually meant on the real box, confirmed after an initial
+     wrong guess (a slow blink for `disks.isSpinning === false`/standby, reverted) turned out not
+     to be it. New [disk-activity.ts](src/disk-activity.ts) reads `/sys/block/<dev>/stat`
+     (read/write-completion counters, fields 1 and 5) directly - no unraid-api/GraphQL involved -
+     and diffs against the previous sample to say whether a device did any I/O since last asked.
+     A new `GET /activity?devices=sda,sdb,...` route in [server.ts](src/server.ts) exposes this;
+     deliberately separate from the slow, GraphQL-backed `/disks` (20+ seconds on a big array,
+     fetched once) so the frontend can poll it every 1.5s cheaply. [App.svelte](src/frontend/App.svelte)
+     only runs that poll while the Tray Map tab is actually visible, and bumps a per-device counter
+     (not a boolean) each time a device comes back active - `BayDrive.device` (from `disk.device`,
+     threaded through [chassis-types.ts](src/shared/chassis-types.ts)/[derive-drive.ts](src/shared/derive-drive.ts))
+     is the join key. `TraySkin.svelte` takes that counter as `flashSeq` and wraps the LED in
+     `{#key flashSeq}`, forcing a remount (and replaying its one-shot flash animation) on every
+     new tick that found activity - a boolean prop would only animate once at the start of a
+     sustained-activity streak instead of continuing to flicker throughout it, verified against a
+     synthetic harness driving a fake `flashSeq` at two different cadences. Both animations respect
+     `prefers-reduced-motion`.
 
 ## Conventions carried forward
 

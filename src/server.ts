@@ -8,6 +8,7 @@ import { startSmartHistoryPolling, getLatestStatuses, getHistory } from "./smart
 import { previewImport } from "./classic-import.js";
 import { enrichWithArrayState } from "./array-state.js";
 import { saveLogo, readLogo, logoFilename } from "./logos.js";
+import { sampleActivity } from "./disk-activity.js";
 
 // Deliberately no web framework - still just node:http. Routes beyond the
 // health check are proxied at /plugins/unraid-disklocation-next/api/ (see
@@ -110,6 +111,20 @@ const server = createServer(async (req, res) => {
       res.writeHead(502, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: describeError(err) }));
     }
+    return;
+  }
+
+  // Deliberately separate from /disks: this reads local /sys/block/*/stat
+  // files directly (see disk-activity.ts), not unraid-api/GraphQL, so it
+  // stays cheap enough for the frontend to poll every second or two for a
+  // real activity-LED effect - /disks itself can take 20+ seconds on a big
+  // array and is only ever fetched once.
+  if (url.pathname === "/activity" && req.method === "GET") {
+    const devices = (url.searchParams.get("devices") ?? "").split(",").filter(Boolean);
+    const result: Record<string, boolean> = {};
+    for (const device of devices) result[device] = sampleActivity(device);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(result));
     return;
   }
 
