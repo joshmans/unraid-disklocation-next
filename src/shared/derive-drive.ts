@@ -39,5 +39,6 @@ export function driveFromDisk(disk: DiskResult, historyStatus?: DriveStatus): Ba
     sizeBytes: disk.sizeBytes,
     vendor: disk.vendor,
     model: disk.name,
+    device: disk.device,
   };
 }
