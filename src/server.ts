@@ -213,8 +213,12 @@ const server = createServer(async (req, res) => {
   res.end();
 });
 
-server.listen(PORT, () => {
-  console.log(`unraid-disklocation-next listening on :${PORT}`);
+// Loopback only: the UI reaches the daemon through the nginx proxy in
+// nginx.ts, which already points at 127.0.0.1. None of the routes above
+// check auth, so binding every interface would let any host on the network
+// rewrite settings.json (graphqlUrl/apiKey), layout.json and logos/.
+server.listen(PORT, "127.0.0.1", () => {
+  console.log(`unraid-disklocation-next listening on 127.0.0.1:${PORT}`);
   // Only worth registering with nginx once we're actually listening -
   // otherwise a reload could point it at a port nothing answers on yet.
   startNginxSelfHeal();
