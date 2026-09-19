@@ -3,11 +3,11 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.19e">
+<!ENTITY version    "2026.09.19f">
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "933f3a87677708a0797b99f3ff8e9f4738c0187cd999313d4931019177157c81">
+<!ENTITY sha256     "fd3d1be23093dacbe886768c6476acc3735c0a6940ccb36819bc0858e49b0936">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,9 @@
 -->
 
 <CHANGES>
+###2026.09.19f
+ - Add a Fahrenheit/Celsius display setting for SMART history temperature (#5)
+
 ###2026.09.19e
  - Show up as a tile in the Disk Utilities group, not a bare Tools stub (#3)
 
