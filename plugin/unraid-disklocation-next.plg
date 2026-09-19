@@ -90,17 +90,42 @@
  - Rename package to unraid-disklocation-next
 </CHANGES>
 
-<!-- Unraid's plugin engine downloads &packageURL;, verifies it against
-     &sha256; (SHA256, not MD5 - the stronger hash Unraid's own Community
-     Apps review bot now retrofits onto plugins that still declare MD5, so
-     this starts on the currently-preferred convention rather than needing
-     the same change again later), saves it locally as &pluginLOC;/&name;.txz,
-     then runs upgradepkg against it - this file's Name attribute controls
-     only the local filename, not the remote release asset's actual name, so
-     the local name (and every later removepkg call) stays version-
-     independent even as &version; and the release URL change across
-     upgrades. -->
-<FILE Name="&pluginLOC;/&name;.txz" Run="upgradepkg --install-new">
+<!-- Real, live-confirmed Slackware behavior (2026-09-19, against an actual
+     install): upgradepkg's "install-new" mode means "install ONLY if nothing by
+     this exact package name is already registered in /var/log/packages -
+     otherwise skip unconditionally, regardless of whether the file content
+     actually changed." An earlier version of this file used a fixed,
+     version-less local filename (&name;.txz) specifically so removepkg
+     calls could stay version-independent - that choice broke every future
+     upgrade forever, since every release registered under the identical
+     package name "unraid-disklocation-next" and upgradepkg silently
+     skipped every subsequent install with "Skipping package
+     unraid-disklocation-next (already installed)". Confirmed live: the
+     daemon stayed on the very first installed binary through two
+     subsequent releases despite Unraid's own plugin-version bookkeeping
+     correctly showing the newer version each time - the outer "is this
+     plugin version already installed" check and Slackware's own inner
+     package-name check are two entirely separate mechanisms, and only
+     encoding &version; into BOTH the release asset name (already done)
+     AND this local cache filename keeps them in sync. Matches the real,
+     currently-working precedent (unraid-docker-folders) exactly. -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# Defensive cleanup before every install/upgrade: remove any package
+# already registered under our name (with or without a version suffix -
+# older installs of this same plugin used a version-less package name),
+# so the upgradepkg step below never again sees "already installed" and
+# silently no-ops. Slackware allows this to run even when nothing matches.
+for pkg in /var/log/packages/unraid-disklocation-next*; do
+  [ -e "$pkg" ] || continue
+  removepkg "$(basename "$pkg")" || true
+done
+]]>
+</INLINE>
+</FILE>
+
+<FILE Name="&pluginLOC;/&name;-&version;.txz" Run="upgradepkg --install-new">
 <URL>&packageURL;</URL>
 <SHA256>&sha256;</SHA256>
 </FILE>
@@ -129,6 +154,12 @@ EMHTTP_LOC="/usr/local/emhttp/plugins/${NAME}"
 RCD_LOC="/usr/local/etc/rc.d"
 
 mkdir -p "$PLUGIN_LOC"
+
+# Cleanup from a fixed bug: installs from before the local cache filename
+# carried a version stashed the download at a fixed, version-less path -
+# harmless leftover cruft now that installs use a versioned filename, but
+# no reason to leave it sitting on the flash boot drive.
+rm -f "$PLUGIN_LOC/$NAME.txz"
 
 if [ ! -f "$PLUGIN_LOC/layout.json" ]; then
   cat > "$PLUGIN_LOC/layout.json" <<'JSON'
@@ -178,7 +209,10 @@ RCD_LOC="/usr/local/etc/rc.d"
 
 "$RCD_LOC/rc.$NAME" stop || true
 
-removepkg "$NAME" || true
+for pkg in /var/log/packages/unraid-disklocation-next*; do
+  [ -e "$pkg" ] || continue
+  removepkg "$(basename "$pkg")" || true
+done
 
 rm -rf "$EMHTTP_LOC"
 
