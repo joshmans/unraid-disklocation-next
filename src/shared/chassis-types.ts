@@ -130,4 +130,11 @@ export interface StoredLayout {
   brandLogos?: BrandLogoConfig;
   /** Optional for backward compatibility with layout.json files saved before per-bay brand overrides existed. */
   manufacturerOverrides?: ManufacturerOverrides;
+  /**
+   * Unit the SMART History tab's temperature chart displays in. Samples are
+   * always stored in Celsius (smartctl's own native unit, see
+   * smart-history.ts) - this only controls display, converted client-side,
+   * so switching it never touches already-recorded history. Absent = "C".
+   */
+  tempUnit?: "C" | "F";
 }

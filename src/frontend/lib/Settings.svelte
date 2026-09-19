@@ -19,6 +19,7 @@
   export let initialSmartHistoryDbPath = "";
   export let initialShowRoleColor = false;
   export let initialShowRoleIcon = false;
+  export let initialTempUnit: "C" | "F" = "C";
   export let save: (
     layout: ChassisLayout,
     logos: LogoConfig,
@@ -26,6 +27,7 @@
     smartHistoryDbPath: string,
     showRoleColor: boolean,
     showRoleIcon: boolean,
+    tempUnit: "C" | "F",
   ) => Promise<{ ok: boolean; error?: string }>;
   export let importClassic: (
     groups: BayGroup[],
@@ -60,6 +62,7 @@
   let smartHistoryDbPath = initialSmartHistoryDbPath;
   let showRoleColor = initialShowRoleColor;
   let showRoleIcon = initialShowRoleIcon;
+  let tempUnit = initialTempUnit;
   let status: "idle" | "saving" | "saved" | "error" = "idle";
   let errorMessage = "";
 
@@ -331,7 +334,15 @@
   async function onSaveClick() {
     status = "saving";
     errorMessage = "";
-    const result = await save(clone(layout), { ...logos }, clone(ledColors), smartHistoryDbPath.trim(), showRoleColor, showRoleIcon);
+    const result = await save(
+      clone(layout),
+      { ...logos },
+      clone(ledColors),
+      smartHistoryDbPath.trim(),
+      showRoleColor,
+      showRoleIcon,
+      tempUnit,
+    );
     if (result.ok) {
       status = "saved";
       setTimeout(() => {
@@ -644,6 +655,17 @@
       only when you save a change here, and the default lives on the flash boot drive - some
       people prefer to redirect it to the array or a cache pool instead. Leave blank to use
       the default. Takes effect the next time the plugin's service restarts.
+    </p>
+    <label class="db-path-row">
+      Temperature unit (SMART History tab)
+      <select bind:value={tempUnit}>
+        <option value="C">Celsius (°C)</option>
+        <option value="F">Fahrenheit (°F)</option>
+      </select>
+    </label>
+    <p class="hint">
+      Samples are always recorded in Celsius - this only changes how the SMART History tab's
+      temperature chart displays them.
     </p>
     <div class="save-row">
       <button type="button" on:click={onSaveClick} disabled={status === "saving"}>
