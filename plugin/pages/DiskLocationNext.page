@@ -1,5 +1,8 @@
-Menu="Utilities"
+Menu="DiskUtilities"
 Icon="server"
+Tag="server"
+Type="xmenu"
+Tabs="false"
 Title="Disk Location Next"
 ---
 <?php

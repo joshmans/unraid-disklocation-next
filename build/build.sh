@@ -65,7 +65,6 @@ RCD_DIR="$STAGE/usr/local/etc/rc.d"
 mkdir -p "$EMHTTP_DIR/app/bin" "$RCD_DIR"
 
 cp plugin/pages/DiskLocationNext.page "$EMHTTP_DIR/DiskLocationNext.page"
-cp plugin/pages/DiskLocationNextTools.page "$EMHTTP_DIR/DiskLocationNextTools.page"
 cp plugin/daemon-control.php "$EMHTTP_DIR/daemon-control.php"
 mkdir -p "$EMHTTP_DIR/app/dist"
 cp dist/frontend.js "$EMHTTP_DIR/app/dist/frontend.js"
