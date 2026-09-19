@@ -3,11 +3,11 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.19d">
+<!ENTITY version    "2026.09.19e">
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "18507cfac21cfeffc507780156d7958b95d7dfacd30c0d5399c528bd955e93fe">
+<!ENTITY sha256     "933f3a87677708a0797b99f3ff8e9f4738c0187cd999313d4931019177157c81">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,9 @@
 -->
 
 <CHANGES>
+###2026.09.19e
+ - Show up as a tile in the Disk Utilities group, not a bare Tools stub (#3)
+
 ###2026.09.19d
  - Stop the app inlining itself onto Unraid's Tools page (#2)
 
