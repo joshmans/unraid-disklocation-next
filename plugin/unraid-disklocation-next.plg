@@ -145,7 +145,13 @@ done
 </INLINE>
 </FILE>
 
-<FILE Name="&pluginLOC;/&name;-&version;.txz" Run="upgradepkg --install-new">
+<!-- installpkg, not upgradepkg: upgradepkg derives a package's name by stripping the last three
+     dash fields (Slackware's name-version-arch-build), and name-version.txz derives to
+     "unraid". Any other installed package that derives to the same name would count as the
+     old version of this one and skip the install as "newer version already installed" (this
+     broke rizowski/unraid-docker-folders#15). The cleanup step above already removes every
+     older copy of this plugin, so no name matching is needed. -->
+<FILE Name="&pluginLOC;/&name;-&version;.txz" Run="installpkg">
 <URL>&packageURL;</URL>
 <SHA256>&sha256;</SHA256>
 </FILE>

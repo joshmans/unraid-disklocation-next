@@ -2,7 +2,7 @@
 # Builds and (with --release) publishes a real installable release of the
 # unraid-disklocation-next plugin: compiled frontend, esbuild-bundled +
 # Node-SEA-packaged backend binary, packed into a Slackware .txz Unraid's own
-# `<FILE Run="upgradepkg --install-new"><URL>...</URL><SHA256>...</SHA256></FILE>`
+# `<FILE Run="installpkg"><URL>...</URL><SHA256>...</SHA256></FILE>`
 # convention expects (SHA256, not MD5 - the stronger hash Unraid's Community
 # Apps review bot now retrofits onto plugins still declaring MD5), then
 # (release mode only) tags, updates the .plg's version/SHA256 entities +
