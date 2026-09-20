@@ -56,7 +56,7 @@ Not yet in Community Applications - install by pasting this repo's `.plg` URL di
 Unraid's **Plugins > Install Plugin** field:
 
 ```
-https://raw.githubusercontent.com/joshmans/unraid-disklocation-next/master/plugin/unraid-disklocation-next.plg
+https://raw.githubusercontent.com/joshmans/unraid-disklocation-next/main/plugin/unraid-disklocation-next.plg
 ```
 
 A Community Apps entry is planned as a fast-follow once a real tagged release has been installed

@@ -5,7 +5,7 @@
 <!ENTITY author     "Joshua Mans">
 <!ENTITY version    "2026.09.20">
 <!ENTITY launch     "Tools/&name;">
-<!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/master/plugin/&name;.plg">
+<!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/main/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
 <!ENTITY sha256     "b56590433aeafdd31c7728b6e0e7462823fe9f308e87cdf6857e31b43c423531">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
