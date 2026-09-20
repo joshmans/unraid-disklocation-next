@@ -1,0 +1,44 @@
+Menu="Dashboard:0"
+---
+<?php
+// Populates Unraid's own $mytiles array, the mechanism Dashboard.php uses to
+// collect a tile from every Menu="Dashboard:N" page (confirmed by reading
+// the classic disklocation plugin's own disklocation_dashboard.page - simply
+// echoing HTML here would NOT show up as a tile without this). Everything
+// dynamic (occupancy count, bay grid, health colors) is rendered client-side
+// by the mounted dashboard.js bundle below - this file only supplies the
+// static tile chrome, same header markup the classic plugin's own 7.2+
+// dashboard tile uses.
+$pluginname = "Disk Location Next";
+
+$mytiles[$pluginname]['column1'] =
+<<<EOT
+<tbody id="tblDiskLocationNext" title="_(Disk Location Next)_">
+	<tr>
+		<td>
+			<span class="tile-header">
+				<span class="tile-header-left">
+					<i class="icon-disks f32"></i>
+					<div class="section">
+						<h3 class="tile-header-main">_(Disk Location Next)_</h3>
+					</div>
+				</span>
+				<span class="tile-header-right">
+					<span class="tile-header-right-controls">
+						<a href="/Tools/DiskLocationNext" title="_(Go to Disk Location Next)_">
+							<i class="fa fa-fw fa-cog control"></i>
+						</a>
+					</span>
+				</span>
+			</span>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			<div id="unraid-disklocation-next-dashboard"></div>
+			<script src="/plugins/unraid-disklocation-next/app/dist/dashboard.js"></script>
+		</td>
+	</tr>
+</tbody>
+EOT;
+?>

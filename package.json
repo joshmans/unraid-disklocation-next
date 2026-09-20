@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
-    "build:frontend": "vite build",
+    "build:frontend": "vite build && vite build --config vite.dashboard.config.ts",
     "dev:frontend": "vite",
     "build:bundle": "esbuild dist/index.js --bundle --platform=node --format=cjs --external:node:sqlite --outfile=dist/bundle.cjs",
     "build:sea": "node --experimental-sea-config=sea-config.json && node -e \"require('fs').copyFileSync(process.execPath, 'dist/unraid-disklocation-next'); require('fs').chmodSync('dist/unraid-disklocation-next', 0o755)\" && npx postject dist/unraid-disklocation-next NODE_SEA_BLOB dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2"
