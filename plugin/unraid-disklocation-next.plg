@@ -3,11 +3,11 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.20">
+<!ENTITY version    "2026.09.20b">
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/main/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "b56590433aeafdd31c7728b6e0e7462823fe9f308e87cdf6857e31b43c423531">
+<!ENTITY sha256     "3f658d871420628887eb738f8db44b06a86649755b8d50ede51fedbffe0f75ab">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,9 @@
 -->
 
 <CHANGES>
+###2026.09.20b
+ - Move the default branch from master to main; the plugin's update URL now points at main (#8)
+
 ###2026.09.20
  - Add a Dashboard widget tile (parity with the classic plugin) (#6)
 
