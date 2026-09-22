@@ -80,7 +80,27 @@ ARCHIVE_NAME="${NAME}-${VERSION}.txz"
 ARCHIVE_PATH="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
 
 echo "--- packing ${ARCHIVE_NAME} ---"
-tar --owner=root --group=root -C "$STAGE" -cJf "$ARCHIVE_PATH" usr/
+# Reproducible packing: the same source commit should always produce the
+# same .txz bytes and the same SHA256, so anyone can rebuild a tagged
+# release themselves and confirm the published binary actually matches
+# that source, rather than just trusting this CI run (raised as a follow-up
+# by the CA security review in #4 - a compiled binary is opaque to review
+# regardless of provenance, but a reproducible one is at least checkable).
+# --sort=name fixes file order (glob/readdir order isn't guaranteed stable);
+# --mtime pins every entry's timestamp to the commit being built instead of
+# "whenever this happened to run" (confirmed on a real box's GNU tar 1.35:
+# identical content produces an identical archive across separate runs and
+# real mtime changes on disk, and a real content change still changes the
+# hash). GNU-tar-only flags - CI (ubuntu-latest) has GNU tar, which is what
+# matters for real releases; a local macOS run (bsdtar) falls back to a
+# plain, non-reproducible archive, which is fine since a local run is never
+# what gets shipped (see this file's header comment).
+if tar --version 2>/dev/null | grep -q "GNU tar"; then
+  tar --owner=root --group=root --mtime="@$(git log -1 --format=%ct)" --sort=name -C "$STAGE" -cJf "$ARCHIVE_PATH" usr/
+else
+  echo "note: non-GNU tar, packed non-reproducibly (fine for a local test build, not for a real release)"
+  tar --owner=root --group=root -C "$STAGE" -cJf "$ARCHIVE_PATH" usr/
+fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   SHA256="$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')"
