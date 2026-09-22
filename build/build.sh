@@ -25,24 +25,36 @@ NAME="unraid-disklocation-next"
 RELEASE_MODE=false
 [[ "${1:-}" == "--release" ]] && RELEASE_MODE=true
 
-VERSION="$(date +%Y.%m.%d)"
 # Same-day re-run (a second release on one calendar day) gets a trailing
 # letter (2026.09.19, then 2026.09.19b, 2026.09.19c, ...) rather than
 # colliding with an existing tag - per explicit direction, not the earlier
-# numeric -2/-3 suffix scheme.
-if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+# numeric -2/-3 suffix scheme. A function, not just inline code at the top,
+# because two PRs merged close together fire two of these jobs at once
+# (confirmed for real: merging #9 then #10 seconds apart raced exactly this
+# way), and the version picked here has to be re-checked against whatever
+# the *other* job already pushed, right before this one commits - not just
+# once at the start, against whatever tags existed before either job's
+# build even began.
+pick_version() {
+  local base candidate letters
+  base="$(date +%Y.%m.%d)"
+  if ! git rev-parse "v${base}" >/dev/null 2>&1; then
+    echo "$base"
+    return
+  fi
   letters="bcdefghijklmnopqrstuvwxyz"
-  found=false
   for ((i = 0; i < ${#letters}; i++)); do
-    candidate="${VERSION}${letters:i:1}"
+    candidate="${base}${letters:i:1}"
     if ! git rev-parse "v${candidate}" >/dev/null 2>&1; then
-      VERSION="$candidate"
-      found=true
-      break
+      echo "$candidate"
+      return
     fi
   done
-  $found || { echo "ran out of same-day letter suffixes (a-z) for ${VERSION}" >&2; exit 1; }
-fi
+  echo "ran out of same-day letter suffixes (a-z) for ${base}" >&2
+  return 1
+}
+
+VERSION="$(pick_version)"
 echo "Building ${NAME} ${VERSION}"
 
 echo "--- tsc (backend) ---"
@@ -114,17 +126,36 @@ if ! $RELEASE_MODE; then
   exit 0
 fi
 
-echo "--- updating plugin/${NAME}.plg ---"
 PLG="plugin/${NAME}.plg"
-sed -i.bak \
-  -e "s#<!ENTITY version    \"[^\"]*\">#<!ENTITY version    \"${VERSION}\">#" \
-  -e "s#<!ENTITY sha256     \"[^\"]*\">#<!ENTITY sha256     \"${SHA256}\">#" \
-  "$PLG"
-rm -f "${PLG}.bak"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+[[ "$BRANCH" == "HEAD" ]] && BRANCH="main" # detached checkout (shouldn't happen for a branch push, but don't push nowhere if it does
 
-CHANGE_NOTE="$(git log "$(git describe --tags --abbrev=0 2>/dev/null || echo "$(git rev-list --max-parents=0 HEAD)")..HEAD" --pretty='format: - %s' | grep -v '^$' || true)"
-[[ -z "$CHANGE_NOTE" ]] && CHANGE_NOTE=" - Maintenance release."
-python3 - "$PLG" "$VERSION" "$CHANGE_NOTE" <<'PY'
+# Commit + tag + push, retried against whatever a concurrent release run
+# (see pick_version's comment above) already pushed in the meantime. Nothing
+# under $STAGE or in the built .txz depends on VERSION's text - only its
+# filename and the .plg's own entities do - so re-picking it here and
+# renaming the already-built archive is enough; no rebuild needed.
+MAX_ATTEMPTS=5
+attempt=1
+while true; do
+  git fetch origin "$BRANCH" --tags >/dev/null 2>&1
+  git reset --hard "origin/${BRANCH}" >/dev/null
+
+  VERSION="$(pick_version)"
+  NEW_ARCHIVE_PATH="${ARCHIVE_DIR}/${NAME}-${VERSION}.txz"
+  [[ "$NEW_ARCHIVE_PATH" != "$ARCHIVE_PATH" ]] && cp "$ARCHIVE_PATH" "$NEW_ARCHIVE_PATH"
+  ARCHIVE_PATH="$NEW_ARCHIVE_PATH"
+
+  echo "--- updating plugin/${NAME}.plg (attempt ${attempt}: ${VERSION}) ---"
+  sed -i.bak \
+    -e "s#<!ENTITY version    \"[^\"]*\">#<!ENTITY version    \"${VERSION}\">#" \
+    -e "s#<!ENTITY sha256     \"[^\"]*\">#<!ENTITY sha256     \"${SHA256}\">#" \
+    "$PLG"
+  rm -f "${PLG}.bak"
+
+  CHANGE_NOTE="$(git log "$(git describe --tags --abbrev=0 2>/dev/null || echo "$(git rev-list --max-parents=0 HEAD)")..HEAD" --pretty='format: - %s' | grep -v '^$' || true)"
+  [[ -z "$CHANGE_NOTE" ]] && CHANGE_NOTE=" - Maintenance release."
+  python3 - "$PLG" "$VERSION" "$CHANGE_NOTE" <<'PY'
 import sys
 path, version, notes = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(path).read()
@@ -134,11 +165,26 @@ text = text.replace(marker, entry, 1)
 open(path, "w").write(text)
 PY
 
-git add "$PLG"
-git commit -m "Release ${NAME} ${VERSION}"
-git tag -a "v${VERSION}" -m "${NAME} ${VERSION}"
-git push origin HEAD
-git push origin "v${VERSION}"
+  git add "$PLG"
+  git commit -m "Release ${NAME} ${VERSION}"
+  git tag -a "v${VERSION}" -m "${NAME} ${VERSION}"
+
+  # Both refs in one push, so the branch commit and its tag land together
+  # rather than leaving a window where another job's pick_version() could
+  # see our commit but not yet our tag and pick the same version again.
+  if git push origin "HEAD:${BRANCH}" "refs/tags/v${VERSION}"; then
+    break
+  fi
+
+  git tag -d "v${VERSION}" >/dev/null
+  attempt=$((attempt + 1))
+  if (( attempt > MAX_ATTEMPTS )); then
+    echo "release push rejected ${MAX_ATTEMPTS} times in a row (persistent race or a real problem, not just contention) - giving up" >&2
+    exit 1
+  fi
+  echo "push rejected (another release landed first) - refetching and retrying as attempt ${attempt}/${MAX_ATTEMPTS}"
+  sleep $(( (RANDOM % 5) + 2 ))
+done
 
 echo "--- publishing GitHub release ---"
 if gh release view "v${VERSION}" >/dev/null 2>&1; then
