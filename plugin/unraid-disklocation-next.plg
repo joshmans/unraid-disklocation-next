@@ -3,11 +3,11 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.22">
+<!ENTITY version    "2026.09.22b">
 <!ENTITY launch     "Tools/&name;">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/main/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "89308fb77b01f155c70de665e85f241ff11270bc1c1abfac3e58f94338797885">
+<!ENTITY sha256     "280e9848883e874a5aed28abf9a48c232fad2a0574e20676ca6724137435a2c9">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -42,6 +42,10 @@
 -->
 
 <CHANGES>
+###2026.09.22b
+ - Merge pull request #4 from unraid-ca-review-bot/ca-review/loopback-listener
+ - Bind the daemon to 127.0.0.1
+
 ###2026.09.22
  - Merge pull request #7 from joshmans/fix/package-name-collision
  - Install the package with installpkg so a colliding derived name cannot skip it
