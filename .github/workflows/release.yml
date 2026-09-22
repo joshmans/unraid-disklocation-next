@@ -8,6 +8,17 @@ on:
       - "ROADMAP.md"
   workflow_dispatch: {}
 
+concurrency:
+  # Two pushes to main close together (e.g. merging two PRs back to back -
+  # confirmed for real: merging #9 then #10 seconds apart fired this twice
+  # concurrently) used to race to commit+push the version bump, and one run
+  # lost with a rejected push. build/build.sh now retries that against
+  # whatever the other run already pushed, so a race no longer fails the
+  # release outright - this just avoids wasting a full second SEA build on
+  # a run that's going to spend most of its time in that retry loop anyway.
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     # Must be a Linux x86_64 runner: the Node SEA binary embeds a copy of
