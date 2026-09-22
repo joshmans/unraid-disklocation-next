@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
-<!ENTITY version    "2026.09.22b">
+<!ENTITY version    "2026.09.22c">
 <!-- Unraid's page router (webGui/template.php) looks pages up by their .page
      filename via basename($path), not by Menu= - confirmed by reading it on
      a real box, and matches how hbaviewer (launch="Tools/HBAviewer_Monitor")
@@ -13,7 +13,7 @@
 <!ENTITY launch     "Tools/DiskLocationNext">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/main/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
-<!ENTITY sha256     "280e9848883e874a5aed28abf9a48c232fad2a0574e20676ca6724137435a2c9">
+<!ENTITY sha256     "22fbf7c962931ef3b4833bf143fbebf9672fbbbcaeb5ed66456e69f87c318176">
 <!ENTITY pluginLOC  "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC  "/usr/local/emhttp/plugins/&name;">
 <!ENTITY rcdLOC     "/usr/local/etc/rc.d">
@@ -48,6 +48,12 @@
 -->
 
 <CHANGES>
+###2026.09.22c
+ - Merge pull request #10 from joshmans/fix/nginx-guard-reproducible-build-launch-url
+ - Merge pull request #9 from joshmans/fix/scope-tls-bypass-to-loopback
+ - Fix launch URL, guard uninstall's nginx reload, make the release .txz reproducible
+ - Scope the unraid-api TLS bypass to loopback requests only
+
 ###2026.09.22b
  - Merge pull request #4 from unraid-ca-review-bot/ca-review/loopback-listener
  - Bind the daemon to 127.0.0.1
