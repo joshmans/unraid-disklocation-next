@@ -4,7 +4,13 @@
 <!ENTITY name       "unraid-disklocation-next">
 <!ENTITY author     "Joshua Mans">
 <!ENTITY version    "2026.09.22b">
-<!ENTITY launch     "Tools/&name;">
+<!-- Unraid's page router (webGui/template.php) looks pages up by their .page
+     filename via basename($path), not by Menu= - confirmed by reading it on
+     a real box, and matches how hbaviewer (launch="Tools/HBAviewer_Monitor")
+     and unassigned.devices.preclear-next (launch="Tools/Preclear") do it
+     despite both also using Menu="DiskUtilities". The page file here is
+     DiskLocationNext.page, not &name;.page, so launch has to name that. -->
+<!ENTITY launch     "Tools/DiskLocationNext">
 <!ENTITY pluginURL  "https://raw.githubusercontent.com/joshmans/&name;/main/plugin/&name;.plg">
 <!ENTITY packageURL "https://github.com/joshmans/&name;/releases/download/v&version;/&name;-&version;.txz">
 <!ENTITY sha256     "280e9848883e874a5aed28abf9a48c232fad2a0574e20676ca6724137435a2c9">
@@ -266,7 +272,10 @@ done
 rm -rf "$EMHTTP_LOC"
 
 sed -i "\|include ${PLUGIN_LOC}/nginx/${NAME}.conf;|d" /etc/nginx/conf.d/locations.conf 2>/dev/null || true
-nginx -s reload 2>/dev/null || true
+# Same rule the daemon's own validatedReload() follows (src/nginx.ts): never
+# reload on a config nginx itself would reject, a bad reload can take the
+# whole webGUI down, not just this plugin's line.
+nginx -t 2>/dev/null && nginx -s reload 2>/dev/null || true
 
 echo "$NAME removed. $PLUGIN_LOC (config, layout, logos, SMART history) was left in place."
 ]]>
