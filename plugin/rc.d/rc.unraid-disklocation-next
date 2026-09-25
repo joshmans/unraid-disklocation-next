@@ -18,8 +18,8 @@
 # for the whole process, not just that one request - flagged by the CA
 # security review that landed the loopback-binding fix in #4. graphql/
 # client.ts now makes that POST by hand and skips certificate checking only
-# for that request, and only when graphqlUrl is loopback, so this is no
-# longer needed here.
+# for that request, and only when graphqlUrl points at this machine (loopback
+# or one of its own addresses), so this is no longer needed here.
 #
 # The port is read from layout.json via jq (already relied on elsewhere in
 # Unraid's own rc.nginx, not a new dependency) - user-configurable through
