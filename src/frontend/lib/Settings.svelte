@@ -7,6 +7,7 @@
   import { resolveLedColor } from "./status";
   import { getDaemonStatus, startDaemon, stopDaemon, setDaemonPort, type DaemonStatus } from "./daemon-control";
   import { uploadLogoFile } from "./logo-upload";
+  import { uid } from "./uid";
 
   // App.svelte owns the fetch/persist and the assignments this layout's bay
   // ids get joined against elsewhere, so it stays the single source of truth
@@ -202,7 +203,7 @@
         const prior = byPos.get(`${row}-${col}`);
         bays.push(
           prior ?? {
-            id: `bay-${crypto.randomUUID()}`,
+            id: `bay-${uid()}`,
             row,
             col,
             skinId: skins[0]?.id ?? "classic",
@@ -241,12 +242,12 @@
   function addGroup(kind: "bays" | "pcie") {
     const group: BayGroup | PcieGroup =
       kind === "bays"
-        ? { kind: "bays", id: `group-${crypto.randomUUID()}`, label: "New bay group", rows: 1, columns: 4, bays: buildBays(1, 4, []) }
+        ? { kind: "bays", id: `group-${uid()}`, label: "New bay group", rows: 1, columns: 4, bays: buildBays(1, 4, []) }
         : {
             kind: "pcie",
-            id: `pcie-${crypto.randomUUID()}`,
+            id: `pcie-${uid()}`,
             label: "New PCIe group",
-            cards: [{ id: `card-${crypto.randomUUID()}`, carrierId: pcieCarriers[0]?.id ?? "default", label: "x16 NVMe carrier", moduleCount: 4 }],
+            cards: [{ id: `card-${uid()}`, carrierId: pcieCarriers[0]?.id ?? "default", label: "x16 NVMe carrier", moduleCount: 4 }],
           };
     layout.groups = [...layout.groups, group];
   }
@@ -269,7 +270,7 @@
   async function onConvertToPcieClick(group: BayGroup) {
     convertingGroupId = group.id;
     convertMessage = "";
-    const cardId = `card-${crypto.randomUUID()}`;
+    const cardId = `card-${uid()}`;
     const idRemap: Record<string, string> = {};
     group.bays.forEach((bay, i) => (idRemap[bay.id] = `${cardId}-m${i}`));
     const pcieGroup: PcieGroup = {
@@ -290,7 +291,7 @@
   function addCard(group: PcieGroup) {
     group.cards = [
       ...group.cards,
-      { id: `card-${crypto.randomUUID()}`, carrierId: pcieCarriers[0]?.id ?? "default", label: "New card", moduleCount: 4 },
+      { id: `card-${uid()}`, carrierId: pcieCarriers[0]?.id ?? "default", label: "New card", moduleCount: 4 },
     ];
     layout = layout;
   }
